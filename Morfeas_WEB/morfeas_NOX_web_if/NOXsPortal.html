@@ -1,0 +1,459 @@
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<link rel="shortcut icon" type="image/x-icon" href="/art/Morfeas_logo_yellow.ico"/>
+<link rel="stylesheet" href="../External_components/dygraphs/dist/dygraph.min.css">
+<title>Morfeas NOXs Portal</title>
+<style type="text/css">
+table, th, td{
+	vertical-align:bottom;
+}
+input{
+	text-align:center;
+}
+.dygraph-legend {
+	background-color: rgba(200, 200, 255, 0.75) !important;
+	padding: 4px;
+	border: 1px solid #000;
+	border-radius: 10px;
+	box-shadow: 4px 4px 4px #888;
+	pointer-events: none;
+	width: 100px;
+}
+</style>
+</head>
+<body>
+<table style="width:100%;text-align:left;overflow-x:auto;">
+	<tr>
+		<td>
+			CAN-if:
+			<select id="NOX_CAN_if" onchange="CAN_if_selector(this)">
+				<option value='0'>None</option>
+			</select>
+		</td>
+		<td name="g_ctrl" style="visibility:hidden;">
+			UniNOx Addr:
+			<select id="sel_addr" onchange="Addr_select(this)">
+			  <option value="0">0</option>
+			  <option value="1">1</option>
+			</select>
+		</td>
+		<td name="g_ctrl" style="visibility:hidden;">Graph Controls:</td>
+		<td name="g_ctrl" style="visibility:hidden;">
+			<button id="play_pause_button" type="button" onclick="play_pause();">Pause</button>
+		</td>
+		<td name="g_ctrl" style="visibility:hidden;">
+			<button type="button" onclick="init_graph();">Clear</button>
+		</td>
+		<td name="g_ctrl" style="visibility:hidden;">
+			<input id="Zoom_Stats_check" type="checkbox" onchange="button_event(this);">Show statistics on zoom</input>
+		</td>
+		<td name="g_ctrl" style="visibility:hidden;">
+			<button name="DWL_buttons"style="display:none;"onclick="download_csv()">Download CSV</button>
+		</td>
+		<td name="g_ctrl" style="visibility:hidden;">
+			<button name="DWL_buttons"style="display:none;"onclick="download_PDF()">Download PDF</button>
+		</td>
+	</tr>
+</table>
+<div id="div_pdf">
+	<div id="div_g" style="width:100%; height:60%;display:none;"></div>
+	<table id="Stats"style="width:100%;text-align:center;display:none;overflow-x:auto;">
+	  <tr>
+		<th colspan="6">Current Zoom's Statistics</th>
+	  </tr>
+	  <tr style="color:green;">
+		<td>NOx Avg(ppm):<br><input name="NOx_stat"readonly></td>
+		<td>NOx Max:<br><input name="NOx_stat"readonly></td>
+		<td>NOx Min:<br><input name="NOx_stat"readonly></td>
+		<td>NOx Peak-Peak<br><input name="NOx_stat"readonly></td>
+	  </tr>
+	  <tr style="color:blue;">
+		<td>O2 Avg(%):<br><input name="O2_stat"readonly></td>
+		<td>O2 Max:<br><input name="O2_stat"readonly></td>
+		<td>O2 Min:<br><input name="O2_stat"readonly></td>
+		<td>O2 Peak-Peak<br><input name="O2_stat"readonly></td>
+	  </tr>
+	</table>
+</div>
+<table id="Current_data"style="width:100%;text-align:center;display:none;">
+  <tr>
+    <th colspan="4">UniNOx's Data</th>
+  </tr>
+  <tr>
+	<td>Port Voltage(V):<br><input id="volts"readonly></td>
+	<td>Port Current(A):<br><input id="amps"readonly></td>
+	<td>Shunt Temp(°F):<br><input id="shunt"readonly></td>
+	<td>Port Utilization(%):<br><input id="util"readonly></td>
+  </tr>
+  <tr>
+	<td style="color: green;">NOx Avg(PPM):<br><input id="NOX"readonly></td>
+	<td style="color: blue;">O2 Avg(%):<br><input id="O2"readonly></td>
+	<td>Heater Mode:<br><input id="Heater_mode"readonly></td>
+	<td><div id="power_off_tl">PowerOFF (sec):</div>
+		<input type="number" min=0 max=65535 size=12 id="power_off" onchange="numb_val(this);" readonly>
+		<button type="button" id="set_button" onclick="post_auto_SWOFF_config();">Set
+	</td>
+  </tr>
+  <tr>
+
+	<td>Heater Error:<br><input id="Heater_error"readonly></td>
+	<td>NOx Error:<br><input id="NOx_error"readonly></td>
+	<td>O2 Error:<br><input id="O2_error"readonly></td>
+	<td>
+		<b>Heater:</b>
+		<button name="heater_button" type="button" onclick="post_heater(1, this.innerHTML);">ON
+		<button name="heater_button" type="button" onclick="post_heater(0, this.innerHTML);">OFF
+	</td>
+  </tr>
+</table>
+<div>
+	<br>Last Status:<input id="status_tab"size="42"style="text-align:left;"readonly>
+</div>
+<footer style="bottom:0;width:99%;">
+	<p>Author: Sam Harry Tzavaras &#169; 12021-12022<br>
+	<a href="../LICENSE">License: AGPLv3</a><br>
+</footer>
+</body>
+<script src="../External_components/dygraphs/dist/dygraph.min.js"></script>
+<script src="../External_components/html2canvas/build/html2canvas.min.js"></script>
+<script src='../External_components/pdfmake/build/pdfmake.min.js'></script>
+<script src='../External_components/pdfmake/build/vfs_fonts.js'></script>
+<script src='../morfeas_ecma/common.js'></script>
+<script src='./NOXsPortal.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12021-12022  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+"use strict";
+comp_check();
+const mode_enum = {
+	NOX_CAN_if: 0,
+	NOX_contents: 1
+};
+document.getElementById("sel_addr").selectedIndex = 0;
+var data_req=false, request_mode = mode_enum.NOX_CAN_if;
+function NOx_disp(state)
+{
+	let stats_check_box = document.getElementById("Zoom_Stats_check").checked;
+	document.getElementById("div_g").style.display = state ? 'inherit':'none';
+	if(!graph || !(graph.isZoomed("x") && stats_check_box))
+		document.getElementById("Current_data").style.display = state ? 'table':'none';
+	let hidden = document.getElementsByName("g_ctrl"),
+		selector = document.getElementById("NOX_CAN_if");
+	for(let i=0; i<hidden.length; i++)
+	{
+		if(!i && selector.selectedIndex)
+			hidden[i].style.visibility = "visible";
+		else
+			hidden[i].style.visibility = state?"visible":"hidden";
+	}
+}
+function CAN_if_selector(sel)
+{
+	clean_up();
+	let status_tab = document.getElementById("status_tab");
+	if(sel.selectedIndex)
+	{
+		request_mode=mode_enum.NOX_contents;
+		status_tab.value = "CAN-if: "+sel.value.toUpperCase()+" selected";
+		if(NOx_if_ws && NOx_if_ws.readyState===NOx_if_ws.OPEN)
+			NOx_if_ws.close();
+	}
+	else
+	{
+		status_tab.style.color='black';
+		status_tab.value="Select CAN-if";
+		NOx_disp(false);
+	}
+}
+function Addr_select(item)
+{
+	clean_up();
+	graph_options.title="UniNOx:" + item.selectedIndex;
+	init_graph();
+}
+function clean_up()
+{
+	document.getElementById("NOX").value="";
+	document.getElementById("Heater_mode").value="";
+	document.getElementById("O2").value="";
+	document.getElementById("power_off").value="";
+	document.getElementById("Heater_error").value="";
+	document.getElementById("NOx_error").value="";
+	document.getElementById("O2_error").value="";
+	document.getElementById("volts").value="";
+	document.getElementById("amps").value="";
+	document.getElementById("shunt").value="";
+	document.getElementById("util").value="";
+	fill_data.auto_poff_value = -1;
+}
+function numb_val(elem)
+{
+	let set_button = document.getElementById("set_button");
+	if(!elem)
+		return
+	if(!elem.value)
+		elem.value = fill_data.auto_poff_value;
+	set_button.style.visibility = elem.value!=fill_data.auto_poff_value?"visible":"hidden";
+	if(elem.valueAsNumber > elem.max)
+		elem.value = elem.max;
+	else if(elem.valueAsNumber < elem.min)
+		elem.value = elem.min;
+}
+function fill_data(data)
+{
+	let sel_addr = document.getElementById("sel_addr").value;
+	//Grab DOM input elements
+	let NOX = document.getElementById("NOX"),
+		Heater_mode = document.getElementById("Heater_mode"),
+		O2 = document.getElementById("O2"),
+		Heater_error = document.getElementById("Heater_error"),
+		NOx_error = document.getElementById("NOx_error"),
+		O2_error = document.getElementById("O2_error"),
+		auto_poff = document.getElementById("power_off"),
+		set_button = document.getElementById("set_button"),
+		power_off_tl = document.getElementById("power_off_tl"),
+		status_tab = document.getElementById("status_tab"),
+		can_if = document.getElementById("NOX_CAN_if"),
+		volts = document.getElementById("volts"),
+		amps = document.getElementById("amps"),
+		shunt = document.getElementById("shunt"),
+		util = document.getElementById("util");
+
+	if(data.Electrics)
+	{
+		volts.value = data.Electrics.BUS_voltage.toFixed(1);
+		amps.value = data.Electrics.BUS_amperage.toFixed(2);
+		shunt.value = data.Electrics.BUS_Shunt_Res_temp.toFixed(1);
+		util.value = data.BUS_Utilization.toFixed(2);
+	}
+	else
+	{
+		volts.style.display = 'none';
+		amps.style.display = 'none';
+		shunt.style.display = 'none';
+		util.style.display = 'none';
+	}
+	if(!Object.entries(data.NOx_sensors[sel_addr]).length)
+	{
+		clean_up();
+		status_tab.style.color='red';
+		status_tab.value = "UniNOx Addr:"+sel_addr+" Not found!!!";
+		NOx_disp(false);
+		fill_data.graph_state = false;
+		return;
+	}
+	else
+	{
+		status_tab.style.color='black';
+		status_tab.value = "Data from "+can_if.value.toUpperCase()+"@UniNOx_Addr:"+sel_addr;
+		NOx_disp(true);
+		if(!fill_data.graph_state)
+		{
+			init_graph();
+			fill_data.graph_state = true;
+		}
+	}
+	if(!data.NOx_sensors[sel_addr].status.meas_state)
+	{
+		if(NOx_if_ws && NOx_if_ws.readyState===NOx_if_ws.OPEN)
+			NOx_if_ws.close();
+		NOX.value = "Not measuring";
+		O2.value = NOX.value;
+		if(fill_data.auto_poff_value != data.Auto_SW_OFF_value)
+		{
+			auto_poff.value = data.Auto_SW_OFF_value;
+			fill_data.auto_poff_value = data.Auto_SW_OFF_value;
+			set_button.style.visibility="hidden";
+		}
+		auto_poff.readOnly = false;
+		power_off_tl.innerHTML = "PowerOFF(sec):";
+	}
+	else
+	{
+		if(data.ws_port && (!NOx_if_ws || NOx_if_ws.readyState!==NOx_if_ws.OPEN))
+			init_websocket("ws://"+window.location.hostname+':'+data.ws_port);
+		auto_poff.readOnly = true;
+		set_button.style.visibility="hidden";
+		auto_poff.value = data.Auto_SW_OFF_value-data.Auto_SW_OFF_cnt;
+		fill_data.auto_poff_value = -1;
+		power_off_tl.innerHTML = "PowerOFF_CNT(sec):";
+		if(data.NOx_sensors[sel_addr].status.is_NOx_value_valid && data.NOx_sensors[sel_addr].NOx_value_avg)
+			NOX.value = data.NOx_sensors[sel_addr].NOx_value_avg.toFixed(3);
+		else
+			NOX.value = "Not Valid";
+		if(data.NOx_sensors[sel_addr].status.is_O2_value_valid && data.NOx_sensors[sel_addr].O2_value_avg)
+			O2.value = data.NOx_sensors[sel_addr].O2_value_avg.toFixed(3);
+		else
+			O2.value = "Not Valid";
+	}
+	Heater_mode.value = data.NOx_sensors[sel_addr].status.heater_mode_state;
+	Heater_error.value = data.NOx_sensors[sel_addr].errors.heater;
+	NOx_error.value = data.NOx_sensors[sel_addr].errors.NOx;
+	O2_error.value = data.NOx_sensors[sel_addr].errors.O2;
+}
+function button_event(item)
+{
+	if(graph.isZoomed("x"))
+	{
+		if(item.checked)
+		{
+			document.getElementById("Current_data").style.display="none";
+			document.getElementById("Stats").style.display="";
+		}
+		else
+		{
+			document.getElementById("Current_data").style.display="";
+			document.getElementById("Stats").style.display="none";
+		}
+	}
+}
+//AJAX response handler
+var xhttp = new XMLHttpRequest();
+xhttp.timeout = 2000;
+xhttp.onreadystatechange = function()
+{
+	let status_tab=document.getElementById("status_tab");
+	if(this.readyState == 4 && this.status == 200)
+	{
+		switch(request_mode)
+		{
+			case mode_enum.NOX_CAN_if:
+				var resp = JSON.parse(this.responseText);
+				var selector = document.getElementById("NOX_CAN_if");
+				for(var i=0; i<resp.logstats_names.length; i++)
+				{
+					if(resp.logstats_names[i].includes("NOX"))
+					{
+						var opt = document.createElement("option");
+						opt.text = resp.logstats_names[i].slice(13, resp.logstats_names[i].indexOf("."));
+						selector.add(opt);
+					}
+				}
+				break;
+			case mode_enum.NOX_contents:
+				if(this.getResponseHeader("Content-Type")==="application/json")
+				{
+					let NOX_data;
+					try{
+					  NOX_data = JSON.parse(this.responseText);
+					}
+					catch(e){
+						status_tab.value = "Error: " + e.message;
+						break;
+					}
+					fill_data(NOX_data);
+				}
+				else if(this.getResponseHeader("Content-Type")==="report/text")
+				{
+					status_tab.value=this.responseText;
+					status_tab.style.color=!this.responseText.includes('Success')?'red':'green';
+				}
+				break;
+		}
+		data_req=false;
+	}
+	else if(this.status == 404)
+	{
+		status_tab.value = "Error 404: Data Not found";
+		status_tab.style.color='red';
+		data_req=false;
+	}
+};
+xhttp.ontimeout = function(){
+  document.getElementById("status_tab").value = "Connection to server: Timeout Error";
+  document.getElementById("status_tab").style.color='blue';
+  data_req=false;
+};
+//request names of available logstats
+xhttp.open("GET", "/morfeas_php/morfeas_web_if.php?COMMAND=logstats_names", true);
+xhttp.send();
+//timer of getting data
+setInterval(get_data_req, 1000);
+function get_data_req()
+{
+	if(!data_req)
+	{
+		var selector = document.getElementById("NOX_CAN_if");
+		if(selector.selectedIndex)
+		{
+			xhttp.open("GET", "/ramdisk/logstat_NOXs_"+selector.value+".json"+"?q="+makeid(), true);
+			xhttp.send();
+			data_req = true;
+		}
+	}
+}
+function post_heater(state, val)
+{
+	var dbus_proxy_arg={handler_type:"NOX"};
+	let addr = Number(document.getElementById("sel_addr").value),
+		can_if = document.getElementById("NOX_CAN_if");
+	if(!can_if.selectedIndex)
+		return;
+	if(val.includes("G_"))
+		addr = -1;
+	dbus_proxy_arg.dev_name=can_if.value;
+	dbus_proxy_arg.method="NOX_heater";
+	dbus_proxy_arg.contents={NOx_address:addr,NOx_heater:(!!state)};
+	xhttp.open("POST", "/morfeas_php/morfeas_dbus_proxy.php", true);
+	xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+	xhttp.send("arg="+compress(JSON.stringify(dbus_proxy_arg)));
+}
+function post_auto_SWOFF_config()
+{
+	var dbus_proxy_arg={handler_type:"NOX"};
+	let can_if = document.getElementById("NOX_CAN_if"),
+		value = Number(document.getElementById("power_off").value);
+	if(!can_if.selectedIndex)
+		return;
+	dbus_proxy_arg.dev_name=can_if.value;
+	dbus_proxy_arg.method="NOX_auto_sw_off";
+	dbus_proxy_arg.contents={NOx_auto_sw_off_value:value};
+	xhttp.open("POST", "/morfeas_php/morfeas_dbus_proxy.php", true);
+	xhttp.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+	xhttp.send("arg="+compress(JSON.stringify(dbus_proxy_arg)));
+}
+window.onload=function(){clean_up(); document.getElementById("status_tab").value="Select CAN-if";}
+document.onkeyup = res_to_norm;
+document.onfocus = res_to_norm;
+function res_to_norm(){
+		let heater_button = document.getElementsByName("heater_button");
+		heater_button[0].innerHTML = "ON";
+		heater_button[1].innerHTML = "OFF";
+};
+document.onkeydown = function(key){
+	if(key.shiftKey)
+	{
+		let heater_button = document.getElementsByName("heater_button");
+		heater_button[0].innerHTML = "G_ON";
+		heater_button[1].innerHTML = "G_OFF";
+	}
+};
+//@license-end
+</script>
+</html>

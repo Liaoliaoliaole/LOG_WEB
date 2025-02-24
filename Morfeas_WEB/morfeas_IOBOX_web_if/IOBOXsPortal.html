@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="shortcut icon" type="image/x-icon" href="../art/Morfeas_logo_yellow.ico">
+<title>Morfeas IOBOX Portal</title>
+</head>
+<body>
+	<table style="margin:left;">
+	  <tr>
+		<td style="text-align:left;width:100%">
+			IOBOX's Device Name:
+			<select id="IOBOX_Dev_name_sel">
+				<option value='0'>None</option>
+			</select>
+		</td>
+	  </tr>
+	</table>
+	<table style="margin:auto;text-align:center;margin-bottom:.075in;width:5in;">
+		<tr>
+			<th colspan="5" style="font-size: 200%;">IOBOX Portal</th>
+		</tr>
+		<tr>
+			<td colspan="4"><input id="status" style="text-align:center;" type="textbox" size="45" readonly></td>
+		</tr>
+	</table>
+	<table style="margin:auto;text-align:center;margin-bottom:.175in;width:5in;display:none" id="IOBOX_status_table">
+		<tr>
+			<th>Dev_Name</th>
+			<th>IPv4_address</th>
+			<th>Connection status</th>
+		</tr>
+		<tr id="IOBOX_status"></tr>
+	</table>
+	<div style="margin:auto;text-align:center;width:5in;display:none" id="CH_meas_tables">
+		<table style="margin:auto;text-align:center;margin-bottom:.075in;width:5in">
+			<tr>
+				<th colspan="5">Wireless Inductive Power Supply</th>
+			</tr>
+			<tr>
+				<th>Input</th>
+				<th>CH_1</th>
+				<th>CH_2</th>
+				<th>CH_3</th>
+				<th>CH_4</th>
+			</tr>
+			<tr id="IOBOX_power_meas_volt"></tr>
+			<tr id="IOBOX_power_meas_amps"></tr>
+		</table>
+		<table style="margin:auto;text-align:center;margin-bottom:.075in;width:6.5in" name="RXs"></table>
+		<table style="margin:auto;text-align:center;margin-bottom:.075in;width:6.5in" name="RXs"></table>
+		<table style="margin:auto;text-align:center;margin-bottom:.075in;width:6.5in" name="RXs"></table>
+		<table style="margin:auto;text-align:center;margin-bottom:.075in;width:6.5in" name="RXs"></table>
+		<table style="margin:auto;text-align:center;margin-bottom:.075in;width:6.5in" name="RXs"></table>
+		<table style="margin:auto;text-align:center;margin-bottom:.075in;width:6.5in" name="RXs"></table>
+	</div>
+	<footer style="bottom:0;width:99%;">
+		<p>Author: Sam Harry Tzavaras &#169; 12021-12022<br>
+		<a href="../LICENSE">License: AGPLv3</a><br>
+	</footer>
+</body>
+<script src='../morfeas_ecma/common.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12021-12022  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+"use strict";
+comp_check();
+const mode_enum = {
+	IOBOX_Dev_name: 0,
+	IOBOX_Dev_contents: 1
+};
+//Init of Elements
+document.getElementById("status").value="Select a device";
+//Global variables for elements
+var batt_and_rssid = document.getElementsByName("batt_and_rssid");
+
+var data_req=false, request_mode = mode_enum.IOBOX_Dev_name, gen_popup_win;
+//AJAX response handler
+var xhttp = new XMLHttpRequest();
+xhttp.timeout = 2000;
+xhttp.onreadystatechange = function()
+{
+	if(this.readyState == 4 && this.status == 200)
+	{
+		var IOBOX_data;
+		switch(request_mode)
+		{
+			case mode_enum.IOBOX_Dev_name:
+				try{ var resp = JSON.parse(this.responseText); }
+				catch{
+					document.getElementById("status").value = "Get IO-BOX Names failed!";
+					document.getElementById("status").style.color='red';
+					break;
+				}
+				var selector = document.getElementById("IOBOX_Dev_name_sel");
+				for(let i=0; i<resp.logstats_names.length; i++)
+				{
+					if(resp.logstats_names[i].includes("IOBOX"))
+					{
+						let opt = document.createElement("option");
+						opt.text = resp.logstats_names[i].slice(14, resp.logstats_names[i].indexOf("."));
+						selector.add(opt);
+					}
+				}
+				break;
+			case mode_enum.IOBOX_Dev_contents:
+				var status_box=document.getElementById("status");
+				if(this.getResponseHeader("Content-Type")==="application/json")
+				{
+					try{IOBOX_data = JSON.parse(this.responseText);}
+					catch{break;}
+					let last_update = new Date(IOBOX_data.logstat_build_date_UNIX*1000);
+					status_box.value = "Last_update: "+last_update.toLocaleDateString()+" "+last_update.toLocaleTimeString();
+					status_box.style.color='black';
+					populate_IOBOX_tables(IOBOX_data);
+				}
+				break;
+		}
+		data_req=false;
+	}
+	else if(this.status == 404)
+	{
+		document.getElementById("status").value = "Error 404: Data Not found";
+		document.getElementById("status").style.color='red';
+		data_req=false;
+	}
+};
+xhttp.ontimeout = function(){
+  document.getElementById("status").value = "Connection to server: Timeout Error";
+  document.getElementById("status").style.color='blue';
+  data_req=false;
+};
+//request names of available logstats
+xhttp.open("GET", "/morfeas_php/morfeas_web_if.php?COMMAND=logstats_names", true);
+xhttp.send();
+//timer of getting data
+setInterval(IOBOX_data_req, 1000);
+function IOBOX_data_req()
+{
+	if(!data_req)
+	{
+		var selector = document.getElementById("IOBOX_Dev_name_sel"),
+			status_box = document.getElementById("status"),
+			IOBOX_status = document.getElementById("IOBOX_status_table"),
+			CH_meas = document.getElementById("CH_meas_tables");
+		if(selector.selectedIndex)
+		{
+			request_mode = mode_enum.IOBOX_Dev_contents;
+			xhttp.open("GET", "/ramdisk/logstat_IOBOX_"+selector.value+".json"+"?q="+makeid(), true);
+			xhttp.send();
+			data_req = true;
+		}
+		else
+		{
+			status_box.value="Select a device";
+			status_box.style.color='black';
+			IOBOX_status.style.display="none";
+			CH_meas.style.display="none";
+		}
+	}
+}
+function populate_IOBOX_tables(IOBOX_data)
+{
+	var IOBOX_status = document.getElementById("IOBOX_status_table"),
+		CH_meas_tables = document.getElementById("CH_meas_tables"),
+		stats = document.getElementById("IOBOX_status"),
+		SDAQ_stats_row_data = [];
+
+	IOBOX_status.style.display="table";
+	SDAQ_stats_row_data.push(IOBOX_data.Dev_name);
+	SDAQ_stats_row_data.push(IOBOX_data.IPv4_address);
+	SDAQ_stats_row_data.push(IOBOX_data.Connection_status);
+	stats.innerHTML = "";
+	generateTable_row(stats, SDAQ_stats_row_data);
+	if(IOBOX_data.Connection_status === "Okay")
+	{
+		CH_meas_tables.style.display="inline";
+		//Populate Power supplies table.
+		var Amps_sum = 0;
+		for(let i=1; i<=4; i++)
+			Amps_sum += IOBOX_data.Power_Supply["CH"+i+"_Iout"]*1000;
+		for(let i=0; i<2; i++)
+		{
+			let IOBOX_power_meas = document.getElementById(i?"IOBOX_power_meas_amps":"IOBOX_power_meas_volt"), supply_meas=[];
+			IOBOX_power_meas.innerHTML="";
+			supply_meas.push(i?Amps_sum.toFixed(2)+'mA':IOBOX_data.Power_Supply.Vin.toFixed(2)+'V');
+			for(let j=1; j<=4; j++)
+			{
+				let value = i?(IOBOX_data.Power_Supply["CH"+j+"_Iout"]*1000).toFixed(2)+'mA':(IOBOX_data.Power_Supply["CH"+j+"_Vout"]).toFixed(2)+'V';
+				supply_meas.push(value);
+			}
+			generateTable_row(IOBOX_power_meas, supply_meas);
+		}
+		//Populate measurements table for each Channel.
+		let RXs_t = document.getElementsByName("RXs");
+		for(let i=0; i<RXs_t.length; i++)
+		{
+			let RX_data = IOBOX_data["RX"+(i+1)];
+			RXs_t[i].innerHTML='';
+			if(typeof(RX_data)==="string")
+			{
+				let cell = RXs_t[i].insertRow(0).insertCell(0);
+				cell.innerHTML="<b>RX"+(i+1)+": "+RX_data+"</b>";
+			}
+			else
+			{
+				RXs_t[i].innerHTML="";
+				let CHs_head = [], Values, j=1;
+				CHs_head.push("RX"+(i+1));
+				CHs_head.push("Status: "+IOBOX_data["RX"+(i+1)].Status);
+				CHs_head.push("RSSID:"+IOBOX_data["RX"+(i+1)].Success+'%');
+				generateTableHead(RXs_t[i], CHs_head);
+				for(let c=0; c<2; c++)
+				{
+					CHs_head = [];
+					Values = [];
+					for(let k=0; k<8; j++, k++)
+					{
+						CHs_head.push("CH:"+j);
+						let RX = IOBOX_data["RX"+(i+1)], val;
+						val = typeof(RX["CH"+j])==="string"?RX["CH"+j]:RX["CH"+j].toFixed(1)+'°C';
+						Values.push(val);
+					}
+					generateTableHead(RXs_t[i], CHs_head);
+					let n_row = RXs_t[i].insertRow();
+					generateTable_row(n_row, Values);
+				}
+			}
+		}
+	}
+	else
+		CH_meas_tables.style.display="none";
+}
+//@license-end
+</script>
+</html>

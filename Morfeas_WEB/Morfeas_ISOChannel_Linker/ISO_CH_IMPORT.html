@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="shortcut icon" type="image/x-icon" href="/art/Morfeas_logo_yellow.ico">
+<title>Morfeas WEB Links Import</title>
+</head>
+<body>
+	<table style="margin:auto;text-align:center;margin-bottom:.075in;">
+		<tr>
+			<th colspan="2" style="font-size: 200%;">ISO Channels Import</th>
+		</tr>
+		<tr>
+			<td>
+				<input type="file" id="import_file" accept=".json" onchange="file_read(event)">
+			</td>
+		</tr>
+		<tr>
+			<td colspan="2"><textarea id="Logger" style="resize:none;" rows="20" cols="50" value="" readonly></textarea></td>
+		</tr>
+		<tr>
+			<td>
+				<input type="button" id="upload_btn" value="Upload" onclick="upload()" disabled>
+			</td>
+		</tr>
+	</table>
+</body>
+<script src='../morfeas_ecma/common.js'></script>
+<script src='../morfeas_ecma/morfeas_web_if.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12021-12022  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+"use strict";
+comp_check();
+var curr_iso_channels,
+	import_ISOChannels,
+	logger = document.getElementById("Logger"),
+	upload_btn = document.getElementById("upload_btn");
+
+//Checks and Initialization
+if(!curr_iso_channels)
+	window.close('','_parent','');
+
+function file_read(event)
+{
+    let input = event.target,
+		filename = input.files[0],
+		reader = new FileReader();
+	reader.onload = function(){
+		let inp_obj,
+			text = reader.result;
+		logger.value='';
+		import_ISOChannels = undefined;
+		upload_btn.disabled = true;
+		logger.value+="Filename: "+filename.name+'\n';
+		try{inp_obj = JSON.parse(text)}
+		catch(e){
+			logger.value+="Error: "+e.message;
+			return;
+		}
+		logger.value+="Validation Started...\n";
+		if(!(import_from_file_validator(inp_obj, logger)))
+		{
+			logger.value+="Error: Validation failed!\n";
+			return;
+		}
+		logger.value+="Validation succeded\nReady to upload\n";
+		//inp_obj vs curr_iso_channels
+		import_ISOChannels = conv_imp_data(inp_obj);
+		upload_btn.disabled = false;
+    };
+    reader.readAsText(filename);
+}
+function upload()
+{
+	if(!import_ISOChannels || !import_ISOChannels.length)
+	{
+		alert("No Data to upload");
+		return;
+	}
+	let post_msg_contents = {COMMAND: "ADD", DATA: import_ISOChannels},
+		post_xhttp = new XMLHttpRequest();
+	post_xhttp.timeout = 2000;
+	post_xhttp.ontimeout = function(){
+		logger.value+="Connection to server: Timeout Error\n";
+	};
+	post_xhttp.onreadystatechange = function(){
+		if(this.readyState == 4 && this.status == 200)
+		{
+			if(this.getResponseHeader("Content-Type")==="report/text")
+				logger.value+="Server-> "+this.responseText+'\n';
+			else if(this.getResponseHeader("Content-Type")==="application/json")
+			{
+				let report;
+				try{report = JSON.parse(this.responseText);}
+				catch{return;}
+				if(report.success)
+					window.close('','_parent','');
+			}
+		}
+		else if(this.status == 404)
+			logger.value+="Error 404: Data Not found\n";
+	};
+	console.log(post_msg_contents);
+	//Send imported elements.
+	post_xhttp.open("POST", "/morfeas_php/morfeas_web_if.php", true);
+	post_xhttp.send(compress(JSON.stringify(post_msg_contents)));
+}
+
+function conv_imp_data(inp_data)
+{
+	if(!inp_data || !inp_data.length)
+		return;
+	let conv_data = [], iso_CH_entry, now_time = new Date();
+
+	for(let i=0; i<inp_data.length; i++)
+	{
+		iso_CH_entry = {};
+		iso_CH_entry.ISOChannel = inp_data[i].ISO_CHANNEL;
+		iso_CH_entry.IF_type = inp_data[i].INTERFACE_TYPE;
+		iso_CH_entry.Anchor = inp_data[i].ANCHOR;
+		iso_CH_entry.Description = inp_data[i].DESCRIPTION;
+		iso_CH_entry.Min = inp_data[i].MIN;
+		iso_CH_entry.Max = inp_data[i].MAX;
+		iso_CH_entry.Build_date_UNIX = Math.trunc(now_time.getTime()/1000);
+		iso_CH_entry.Mod_date_UNIX = Math.trunc((now_time.getTime()/1000)+1);
+		if(inp_data[i].hasOwnProperty('ALARM_HIGH_VAL'))
+			iso_CH_entry.AlarmHighVal = inp_data[i].ALARM_HIGH_VAL;
+		if(inp_data[i].hasOwnProperty('ALARM_LOW_VAL'))
+			iso_CH_entry.AlarmLowVal = inp_data[i].ALARM_LOW_VAL;
+		if(inp_data[i].hasOwnProperty('ALARM_HIGH'))
+			iso_CH_entry.AlarmHigh = inp_data[i].ALARM_HIGH;
+		if(inp_data[i].hasOwnProperty('ALARM_LOW'))
+			iso_CH_entry.AlarmLow = inp_data[i].ALARM_LOW;
+		if(inp_data[i].hasOwnProperty('UNIT'))
+			iso_CH_entry.Unit = inp_data[i].UNIT;
+		if(inp_data[i].hasOwnProperty('CAL_DATE'))
+			iso_CH_entry.Cal_date = inp_data[i].CAL_DATE;
+		if(inp_data[i].hasOwnProperty('CAL_PERIOD'))
+			iso_CH_entry.Cal_period = inp_data[i].CAL_PERIOD;
+		conv_data.push(iso_CH_entry);
+	}
+	return conv_data;
+}
+//@license-end
+</script>
+</html>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<link rel="shortcut icon" type="image/x-icon" href="/art/Morfeas_logo_yellow.ico"/>
+<title>Morfeas SDAQ Scaling for </title>
+</head>
+<body>
+	<table style=" margin-left: auto; margin-right: auto; text-align:center; vertical-align:middle;">
+		<tr>
+			<td>Signal</td>
+			<td>to</td>
+			<td>Target</td>
+		</tr>
+		<tr>
+			<td>
+				P0:  <input type="text" title="Min signal value" id="base_min" name="scale_val" size="6" value=0 onchange="number_val(this)">
+			</td>
+			<td>→</td>
+			<td>
+				<input type="text" title="Min target value" id="target_min" name="scale_val" size="6" value=0 onchange="number_val(this)">
+			</td>
+		</tr>
+		<tr>
+			<td>
+				P1:  <input type="text" title="Max signal value" id="base_max" name="scale_val" size="6" value=0 onchange="number_val(this)">
+			</td>
+			<td>→</td>
+			<td>
+				<input type="text" title="Max target value" id="target_max" name="scale_val" size="6" value=0 onchange="number_val(this)">
+			</td>
+		</tr>
+		<tr>
+			<td colspan="3">
+				<span title="Send scaling to point">
+					<button type="button" onclick="send()">Send</button>
+				</span>
+			</td>
+		</tr>
+	</table>
+	<footer style="bottom:0;width:99%;">
+		<p>Author: Sam Harry Tzavaras &#169; 12024-12025<br>
+		<a href="../../LICENSE">License: AGPLv3</a><br>
+	</footer>
+</body>
+<script src='../../morfeas_ecma/common.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12024-12025  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+	"use strict";
+	var point_row, point_name = getUrlParam('p');
+	if(typeof point_row == 'undefined' || typeof point_name == 'undefined')
+		close();
+	document.title += ' '+point_name;
+
+	function number_val(val)
+	{
+		if(isNaN(val.value))
+		{
+			val.value=parseFloat(val.value);
+			if(isNaN(val.value))
+				val.value=0;
+		}
+	}
+	function send()
+	{
+		var base_min=parseFloat(document.getElementById("base_min").value),
+			base_max=parseFloat(document.getElementById("base_max").value),
+			target_min=parseFloat(document.getElementById("target_min").value),
+			target_max=parseFloat(document.getElementById("target_max").value);
+		var offset,gain;
+
+		gain=(target_max-target_min)/(base_max-base_min);
+		offset=target_min-gain*base_min;
+		if(!isNaN(gain)&&!isNaN(offset))
+		{
+			point_row.children[1].children[0].value = base_max;
+			point_row.children[1].children[0].onchange()
+			point_row.children[2].children[0].value = 0;
+			point_row.children[2].children[0].onchange()
+			point_row.children[3].children[0].value = offset;
+			point_row.children[3].children[0].onchange()
+			point_row.children[4].children[0].value = gain;
+			point_row.children[4].children[0].onchange()
+			close();
+		}
+		else
+			alert("Calculation failed!!!");
+	}
+//@license-end
+</script>
+</html>

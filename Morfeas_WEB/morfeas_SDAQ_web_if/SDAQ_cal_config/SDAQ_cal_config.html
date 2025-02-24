@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<link rel="shortcut icon" type="image/x-icon" href="/art/Morfeas_logo_yellow.ico"/>
+<title>Morfeas SDAQ Portal Calibration table</title>
+</head>
+<body>
+	Status:<input id="status" style="text-align:center;" type="textbox" size="50" value="Init" readonly>
+	<table id="SDAQ_info_tbl"></table>
+	<label for="CHs">CH:</label><select id="CHs" name="CHs" onchange="CH_sel(this)"></select>
+	<div id="SDAQ_calibration_tables" style="display:none">
+		<table>
+			<tr>
+				<td>
+					<label for="Cal_date">Calibration Date:</label>
+					<input type="date" id="Cal_date" name="Cal_date" max="2255-12-31" min="2000-01-01" oninput="cal_date_reg(this)">
+				</td>
+				<td>
+					<label for="period">Re-Calibration Period (Months):</label>
+					<input type="number" id="period" name="period" max="255" min="1" size="3" onchange="cal_period_reg(this)">
+				</td>
+				<td>
+					<label for="unit">CH's Unit:</label>
+					<select id="unit" name="unit" onchange="cal_unit_reg(this)">
+				</td>
+				<td>
+					<label for="points">Used Points:</label>
+					<input type="number" id="points" name="points" min="0" size="2" onchange="cal_used_points_reg(this)">
+				</td>
+			</tr>
+		</table>
+		<table id="SDAQ_cal_points_tbl"></table>
+		<span title="Save calibration of all channels">
+			<button type="button" onclick="save()">Save</button>
+		</span>
+	</div>
+	<footer style="bottom:0;width:99%;">
+		<p>Author: Sam Harry Tzavaras &#169; 12019-12021<br>
+		<a href="../../LICENSE">License: AGPLv3</a><br>
+	</footer>
+</body>
+<script src='../../morfeas_ecma/common.js'></script>
+<script src='./SDAQ_cal_config.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12019-12025  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+	"use strict";
+	var calc_wins = [];
+	document.getElementById("status").value = "Init";
+	var SDAQ_units, SDAQs_logstat, SDAQ_cal_data, SDAQ_cal_data_curr, SDAQnet=getUrlParam("SDAQnet"), SDAQaddr=getUrlParam("SDAQaddr");
+	if(!SDAQnet||!SDAQaddr)
+	{
+		alert("Parameters of GET request missing!!!!");
+		window.close();
+	}
+	//AJAX response handler
+	var SDAQ_units_xhttp = new XMLHttpRequest(), SDAQ_cal_xml_xhttp = new XMLHttpRequest(), SDAQ_data_xhttp = new XMLHttpRequest();
+	SDAQ_units_xhttp.timeout = 5000; SDAQ_cal_xml_xhttp.timeout = SDAQ_units_xhttp.timeout = SDAQ_data_xhttp.timeout;
+	SDAQ_units_xhttp.onreadystatechange = xhttp_onreadystatechange; SDAQ_cal_xml_xhttp.onreadystatechange = xhttp_onreadystatechange;
+	SDAQ_data_xhttp.onreadystatechange = xhttp_onreadystatechange;
+	SDAQ_units_xhttp.ontimeout = xhttp_timeout; SDAQ_cal_xml_xhttp.ontimeout = xhttp_timeout; SDAQ_units_xhttp.ontimeout = xhttp_timeout;
+
+	function xhttp_timeout(){document.getElementById("status").value = "Connection Timeout";};
+	function xhttp_onreadystatechange()
+	{
+		if (this.readyState == 4 && this.status == 200)
+		{
+			switch(this.getResponseHeader("Content-Type"))
+			{
+				case "application/json":
+					try{SDAQs_logstat = JSON.parse(this.responseText);}
+					catch(e){
+						document.getElementById("status").value = "Error: " + e.message;
+						break;
+					}
+					if(SDAQs_logstat.SDAQs_data.length)
+					{
+						let sel_CH = (document.getElementById("CHs").selectedIndex)-1,
+							SDAQ_point_name = get_location_UrlParam(this.responseURL, "p");
+						for(let i=0; i<SDAQs_logstat.SDAQs_data.length; i++)
+						{
+							if(SDAQs_logstat.SDAQs_data[i].Address==SDAQaddr)
+							{
+								let SDAQ_meas_avg = SDAQs_logstat.SDAQs_data[i].Meas[sel_CH].Meas_avg,
+									Point_row = document.getElementById("SDAQ_cal_points_tbl").childNodes[7];//.childNodes[1].childNodes[0].innerText;
+								for(let j=0; j<Point_row.children.length; j++)
+								{
+									if(Point_row.childNodes[j].childNodes[0].innerText === SDAQ_point_name)
+									{
+										let offset_cell = Point_row.childNodes[j].childNodes[3].children[0];
+										offset_cell.value = parseFloat(offset_cell.value)-Math.round(SDAQ_meas_avg*10000)/10000 ;
+										offset_cell.onchange();
+										break;
+									}
+								}
+								break;
+							}
+						}
+					}
+					break;
+				case "Morfeas_SDAQ_units/json":
+					try{SDAQ_units = JSON.parse(this.responseText);}
+					catch(e){
+						document.getElementById("status").value = "Error: " + e.message;
+						break;
+					}
+					SDAQ_units = SDAQ_units.SDAQ_UNITs
+					let units_sel = document.getElementById("unit");
+					while (units_sel.options.length)//remove all options from units (select)
+						units_sel.remove(0);
+					for(let i=0; i<SDAQ_units.length; i++)//populate options to units (select)
+					{
+						let new_opt = document.createElement("option");
+						new_opt.text = SDAQ_units[i];
+						units_sel.options.add(new_opt);
+					}
+					break;
+				case "Morfeas_SDAQ_calibration_data/xml":
+					if(!this.responseXML)
+					{
+						try{SDAQ_cal_data = (new DOMParser()).parseFromString(this.responseText, "application/xml");}
+						catch(e)
+						{
+							document.getElementById("status").value = "Error: " + e.message;
+							break;
+						}
+					}
+					else
+						SDAQ_cal_data = this.responseXML;
+					SDAQ_cal_data = SDAQ_cal_XML2obj(SDAQ_cal_data);
+					document.getElementById("status").value = "Okay";
+					SDAQ_cal_data_curr = JSON.parse(JSON.stringify(SDAQ_cal_data));
+					popu_SDAQ_info_tbl(SDAQ_cal_data);
+					let CHs = document.getElementById("CHs");
+					while (CHs.options.length)//Remove all options from CHs (select)
+						CHs.remove(0);
+					//Add '-' option
+					let new_opt = document.createElement("option");
+					new_opt.text = '-';
+					CHs.options.add(new_opt);
+					for(let i=1; i<=SDAQ_cal_data.SDAQ.SDAQ_info.Available_Channels; i++)//Populate options to CHs (select)
+					{
+						let new_opt = document.createElement("option");
+						new_opt.text = i;
+						CHs.options.add(new_opt);
+					}
+					break;
+				case "report/text":
+					alert(this.responseText);
+					if(this.responseText === "Server: Calibration table written with success at SDAQ with ADDR:"+SDAQaddr)
+					{
+						document.getElementById("status").value = "Okay";
+						SDAQ_cal_data_curr = JSON.parse(JSON.stringify(SDAQ_cal_data));
+						break;
+					}
+				default:
+					document.getElementById("status").value = this.responseText;
+			}
+		}
+		else if(this.status == 404)
+			document.getElementById("status").value = "Not found return";
+	};
+	//request the available units
+	SDAQ_units_xhttp.open("GET", "/morfeas_php/morfeas_SDAQnet_proxy.php?UNITs");
+	SDAQ_units_xhttp.send();
+	//request SDAQ cal data
+	SDAQ_cal_xml_xhttp.open("GET", "/morfeas_php/morfeas_SDAQnet_proxy.php?SDAQnet="+SDAQnet+"&SDAQaddr="+SDAQaddr);
+	SDAQ_cal_xml_xhttp.send();
+
+	function popu_SDAQ_info_tbl(SDAQ_cal_data)
+	{
+		var SDAQ_info_tbl = document.getElementById("SDAQ_info_tbl");
+		function add_tbl_line(name, value)
+		{
+			let new_row = SDAQ_info_tbl.insertRow();
+			new_row.insertCell().appendChild(document.createTextNode(name+':'));
+			new_row.insertCell().appendChild(document.createTextNode(value));
+		};
+		if(!SDAQ_cal_data || !SDAQ_cal_data.SDAQ.SDAQ_info)
+			return;
+		for(let SDAQ_info in SDAQ_cal_data.SDAQ.SDAQ_info)
+			add_tbl_line(SDAQ_info, SDAQ_cal_data.SDAQ.SDAQ_info[SDAQ_info]);
+	}
+
+	function popu_SDAQ_CH_points(CH_num)
+	{
+		let Calibration_date_as_data;
+		var SDAQ_cal_points_tbl = document.getElementById("SDAQ_cal_points_tbl"),
+			Cal_date = document.getElementById("Cal_date"),
+			period = document.getElementById("period"),
+			unit = document.getElementById("unit"),
+			points = document.getElementById("points");
+		points.max = SDAQ_cal_data.SDAQ.SDAQ_info.Max_num_of_cal_points;
+		points.value = SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Used_Points;
+		period.value = SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Calibration_Period;
+		unit.selectedIndex = SDAQ_units.indexOf(SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Unit);
+		if(SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Calibration_date === "2000/00/00")//Check Calibration_date for unreferenced value
+		{
+			alert("Calibration_Data of Channel "+ CH_num + " is unreferenced\n Set to today");
+			Calibration_date_as_data = new Date();
+			SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Calibration_date = Calibration_date_as_data.getFullYear()+'/'+
+																			    pad((Calibration_date_as_data.getMonth()+1),2)+'/'+
+																			    pad(Calibration_date_as_data.getDate(),2);
+		}
+		else
+			Calibration_date_as_data = new Date(SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Calibration_date);
+		Cal_date.value = Calibration_date_as_data.getFullYear()+'-'+
+						 pad((Calibration_date_as_data.getMonth()+1),2)+'-'+
+						 pad(Calibration_date_as_data.getDate(),2);
+		//Build and populate SDAQ_cal_points_tbl
+		SDAQ_cal_points_tbl.innerHTML="";//Clean table.
+		//Add table's headers
+		let th = document.createElement("th"), text = document.createTextNode("Point_#");
+		th.appendChild(text);
+		SDAQ_cal_points_tbl.appendChild(th);
+		for(let SDAQ_point_type_name in SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Points.Point_0)
+		{
+			let th = document.createElement("th");
+			let text = document.createTextNode(SDAQ_point_type_name);
+			th.appendChild(text);
+			SDAQ_cal_points_tbl.appendChild(th);
+		}
+		//Add points
+		let i=0;
+		for(let SDAQ_point_name in SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Points)
+		{
+			let new_point_row = SDAQ_cal_points_tbl.insertRow();
+			new_point_row.insertCell().appendChild(document.createTextNode(SDAQ_point_name));
+			for(let SDAQ_point_type in SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Points[SDAQ_point_name])
+			{
+				let cell = new_point_row.insertCell();
+				var point_elem_inp = document.createElement("INPUT");
+				point_elem_inp.setAttribute("type", "text");
+				point_elem_inp.setAttribute("size", "10");
+				point_elem_inp.onchange = function()
+				{
+					let point_type_val;
+					if(!isNaN(point_type_val = parseFloat(this.value)))
+						SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Points[SDAQ_point_name][SDAQ_point_type] = point_type_val;
+					this.value = SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Points[SDAQ_point_name][SDAQ_point_type];
+				};
+				if(i>=SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Used_Points)
+					point_elem_inp.disabled = true;
+				point_elem_inp.value = SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Points[SDAQ_point_name][SDAQ_point_type];
+				cell.appendChild(point_elem_inp);
+			}
+			//Add Call and zero buttons.
+			let btn_calc_cell = new_point_row.insertCell(),
+				btn_zero_cell = new_point_row.insertCell(),
+			    point_elem_calc_btn = document.createElement('button'),
+			    point_elem_zero_btn = document.createElement('button');
+			point_elem_calc_btn.textContent = 'Calc';
+			point_elem_calc_btn.title = "Two point scaling Calculation for "+SDAQ_point_name+
+									    "\n               (Must Save to take effect)";
+			point_elem_zero_btn.textContent = 'Zero';
+			point_elem_zero_btn.title = "Calc offset via meas for "+SDAQ_point_name+
+										"\n    (Must Save to take effect)";
+			if(i>=SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_num].Used_Points)
+			{
+				point_elem_calc_btn.disabled = true;
+				point_elem_zero_btn.disabled = true;
+			}
+			btn_calc_cell.onclick = function()
+			{
+				let i;
+				for(i=0;i<calc_wins.length;i++)
+				{
+					if(!(calc_wins[i].closed) && calc_wins[i].location && calc_wins[i].location.href.includes(SDAQ_point_name))
+						break;
+				}
+				if(i==calc_wins.length)
+				{
+					let calc_win = PopupCenter("./Calc.html?q="+makeid()+"&p="+SDAQ_point_name, "", "425", "200");
+					calc_win.point_row = new_point_row;
+					calc_wins.push(calc_win);
+				}
+				else
+					calc_wins[i].focus();
+			};
+			btn_zero_cell.onclick = function()
+			{	//Request SDAQs data
+				SDAQ_cal_xml_xhttp.open("GET", "/ramdisk/logstat_SDAQs_"+SDAQnet+".json"+"?q="+makeid()+"&p="+SDAQ_point_name, true);
+				SDAQ_cal_xml_xhttp.send();
+			};
+			btn_calc_cell.appendChild(point_elem_calc_btn);
+			btn_zero_cell.appendChild(point_elem_zero_btn);
+			i++;
+		}
+	}
+	function cal_date_reg(inp)
+	{
+		var CH_sel_val = document.getElementById("CHs").value;
+		if(inp.value)
+		{
+			let inp_as_data = new Date(inp.value);
+			SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_sel_val].Calibration_date = inp_as_data.getFullYear() + '/' +
+														    					   (inp_as_data.getMonth()+1) + '/' +
+																					inp_as_data.getDate();
+		}
+		else
+		{
+			let today = new Date();
+			inp.value = today.getFullYear()+'-'+
+						pad((today.getMonth()+1),2)+'-'+
+						pad(today.getDate(),2);
+			SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_sel_val].Calibration_date = today.getFullYear() + '/' +
+														    					   (today.getMonth()+1) + '/' +
+																					today.getDate();
+		}
+	}
+	function cal_unit_reg(inp)
+	{
+		var CH_sel_val = document.getElementById("CHs").value;
+		if(inp.value)
+			SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_sel_val].Unit = inp.value;
+	}
+	function cal_period_reg(inp)
+	{
+		var CH_sel_val = document.getElementById("CHs").value;
+		let _min = parseInt(inp.min), _max = parseInt(inp.max);
+
+		if(inp.value>_max || inp.value<_min || isNaN(parseInt(inp.value)))
+			inp.value = SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_sel_val].Calibration_Period;
+		else
+			SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_sel_val].Calibration_Period = parseInt(inp.value);
+	}
+	function cal_used_points_reg(inp)
+	{
+		var CH_sel_val = document.getElementById("CHs").value,
+			SDAQ_cal_points_tbl = document.getElementById("SDAQ_cal_points_tbl");
+		let _min = parseInt(inp.min), _max = parseInt(inp.max), val = parseInt(inp.value);
+
+		if(val>_max || val<_min || isNaN(parseInt(inp.value)))
+			inp.value = SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_sel_val].Used_Points;
+		else
+		{
+			SDAQ_cal_data.SDAQ.Calibration_Data["CH"+CH_sel_val].Used_Points = val;
+			for(let i=0; i<SDAQ_cal_data.SDAQ.SDAQ_info.Max_num_of_cal_points; i++)
+			{
+				let tbl_line = SDAQ_cal_points_tbl.childNodes[7].childNodes[i],
+					dis_val = i<val? false:true;
+				for(let j=1; j<tbl_line.childElementCount; j++)
+					tbl_line.childNodes[j].firstChild.disabled = dis_val;
+			}
+		}
+	}
+	function CH_sel(inp)
+	{
+		var SDAQ_calibration_tables = document.getElementById("SDAQ_calibration_tables"),
+			SDAQ_cal_points_tbl = document.getElementById("SDAQ_cal_points_tbl");
+		if(inp.value !== '-')
+		{
+			popu_SDAQ_CH_points(parseInt(inp.value));
+			SDAQ_calibration_tables.style.display='inline';
+		}
+		else
+		{
+			SDAQ_cal_points_tbl.innerHTML="";
+			SDAQ_calibration_tables.style.display='none';
+		}
+	}
+	function save(Channel)
+	{
+		let error;
+		if((error = SDAQ_cal_data_error(SDAQ_cal_data)))
+		{
+			alert(error);
+			return;
+		}
+		let post_new_SDAQ_cal = SDAQ_cal_data_diff(SDAQ_cal_data, SDAQ_cal_data_curr);
+		if(Channel && post_new_SDAQ_cal)
+		{
+			for(let SDAQ_CHn in post_new_SDAQ_cal.SDAQ.Calibration_Data)
+				if(SDAQ_CHn !== "CH"+Channel)
+					delete post_new_SDAQ_cal.SDAQ.Calibration_Data[SDAQ_CHn];
+		}
+		post_new_SDAQ_cal = new_SDAQ_cal_for_post(SDAQnet, SDAQaddr, post_new_SDAQ_cal);
+		if(!post_new_SDAQ_cal)
+		{
+			alert("Nothing to commit");
+			return;
+		}
+		//Post new cal table
+		SDAQ_cal_xml_xhttp.open("POST", "/morfeas_php/morfeas_SDAQnet_proxy.php");
+		SDAQ_cal_xml_xhttp.send(compress(post_new_SDAQ_cal));
+	}
+	//Close popup windows
+	function close_all_popup()
+	{
+		if(calc_wins.length)
+			for(let i=0; i<calc_wins.length; i++)
+				if(!calc_wins[i].closed)
+					calc_wins[i].close();
+	};
+	window.onbeforeunload = close_all_popup;
+//@license-end
+</script>
+</html>

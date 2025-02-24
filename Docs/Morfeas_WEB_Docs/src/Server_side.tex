@@ -1,0 +1,293 @@
+\section{Server Side}
+At the server side the Morfeas WEB have some PHP scripts that handle requests from the client. This scripts runs via the PHP engine that executed as module of the Apache WEB server.
+The PHP scripts located under the ``Morfeas\_php" directory. Also the outputs (Loggers, Logstats) of the Morfeas components exported at local directory ``/mnt/ramdisk/" where is
+linked as source directory to Apache and can be access from alias ``./ramdisk". At this aliased directory the exported Logstat for all the Morfeas components can be found and at
+subdirectory ``Morfeas\_Loggers" the Loggers of the components.\\
+The Logstats are exported every second in JSON format and contains the current state of the device(s) that are handled by a Morfeas component. The Logger of a component is
+a text file in human readable format and contains the chronological reports of the component.
+
+At the following subsections are attributed to the PHP scripts of the Morfeas WEB.
+
+\subsection{Morfeas\_Web\_if.php}
+The PHP script file Morfeas\_Web\_if.php contains the functionality to provide the Logstat files at the client request and to receive ISO Channels configuration objects.
+The script can be called as ``./morfeas\_php/Morfeas\_Web\_if.php" and accept ``GET" and ``POST" requests.
+\subsubsection{GET request}
+In every call with ``GET"" request the Morfeas\_Web\_if.php script expecting an argument ``COMMAND" with value the one of the allowed commands.
+At the table~\ref{table:Morfeas_Web_if} will present the allowed commands for the Morfeas\_Web\_if.php script.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|}
+ \hline
+ \textbf{Command} & \textbf{Description} & \textbf{Content type}\\
+ \hline
+ logstats & Return all logstat combined & JSON \\
+ logstats\_names & Return the filenames of the available logstat & JSON \\
+ loggers & Return the filenames of the Morfeas component logger & JSON \\
+ opcua\_config & Return the current ISO Channel configuration & JSON\\
+ \hline
+\end{tabular}
+\caption{GET request values for argument ``COMMAND"}
+\label{table:Morfeas_Web_if}
+\end{table}
+
+If the GET request made without the argument ``COMMAND" or with an unknown value in to it, the return will be ``HTTP ERROR 404".
+
+\subsubsection{POST request}
+The ``Morfeas\_Web\_if.php" script is also accept ``POST" requests in order to modify the configurations for the ISO Channel objects of the OPC-UA nodeset.
+The contents for this kind of request is a JSON object with two properties: ``COMMAND" and ``DATA".\\
+The property ``COMMAND" contains a string with the operation that the script will do, and the ``DATA" an array of objects.
+Each element of ``DATA" array shall contain a set of variables related to the channel's configuration.
+A structure example for the argument for this POST request presented at listing~\ref{lst:Morfeas_Web_if}.
+\par At success the ``Morfeas\_Web\_if.php" return a JSON object with a report, otherwise return a string with the error that cause it to fail.
+\newpage
+\begin{lstlisting}[frame=single,caption=Example for argument of POST request for Morfeas\_Web\_if.php,label=lst:Morfeas_Web_if]
+{
+ "COMMAND":"ADD"|"DEL"|"MOD",
+ "DATA":[
+   {
+      "ISOChannel":"Name of the ISO Channel",
+      "IF_type":"MDAQ"|"SDAQ"|"IOBOX"|"MTI"|"NOX",
+      "Anchor":"The anchored physical input with the current ISO Channel",
+      "Description":"Description of the ISO Channel",
+      "Max":"Minimum input value",
+      "Min":"maximum input value",
+      "Unit":"Unit of measurements (Not needed for SDAQ IF_type)"
+   },...
+ ]
+}
+\end{lstlisting}
+
+\subsection{config.php}
+The ``config.php" is a PHP script part of the Morfeas WEB where is responsible for each configuration of the computer and the Morfeas System. It's can called from ``./morfeas\_php/config.php",
+and accept ``GET" and ``POST" HTTP requests. At the following subsection the functionality and data the can be exchange via this script will be explained in details.
+
+\subsubsection{GET request}
+For accept a ``GET" request the ``config.php" is required to received the request with the argument ``COMMAND" that have a specific value that explain the request that the client want.
+At the table~\ref{table:GET_config} derived a list with the allowed values and descriptions for the functionality of each one.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|}
+ \hline
+ \textbf{Command} & \textbf{Description} & \textbf{Content type}\\
+ \hline
+ getbundle & Return a .mbl file with wholly Morfeas System configuration & File \\
+ getISOstandard\_file & Make a force download of current ISOStandard file & File \\
+ getCurConfig & Return the current Internet and NTP configuration& JSON \\
+ timedatectl & Return the output of timedatectl & HTML \\
+ getMorfeasConfig & Return the current Morfeas system configuration & XML \\
+ getISOstandard & Return an instance of the current ISOStandard file & XML \\
+ getCANifs\_names & Return the available CANBus interfaces & JSON \\
+ \hline
+\end{tabular}
+\caption{GET request values for argument ``COMMAND"}
+\label{table:GET_config}
+\end{table}
+
+In case that the value of argument ``COMMAND" is not valid or if the argument is missing the script will return ``HTTP ERROR 404".
+
+\subsubsection{POST request}
+
+The ``config.php" script accept also POST HTTP requests that caries out configurations for the computer and the Morfeas System.
+The script steering the functionality according to the ``CONTENT\_TYPE" of the HTTP message that the client sent to the server.
+The data that contained in the POST request message must be compressed with the internally implemented ``compress" function.
+At table~\ref{table:POST_config} will be present all the allowed set values for the ``CONTENT\_TYPE" of a POST request.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|}
+ \hline
+ \textbf{Content type} & \textbf{Description} & \textbf{Contents Data}\\
+ \hline
+ net\_conf & Request with new config for Hostname, INET, CAN, NTP & JSON \\
+ Morfeas\_config & Request with new configuration for Morfeas system & XML\\
+ ISOstandard &  Request with new ISOStandard &  XML\\
+ Morfeas\_bundle*** & Request with a restoring bundle file & MBL \\
+ reboot & Request for computer reboot & VOID \\
+ shutdown & Request for computer power off & VOID \\
+ \hline
+\end{tabular}
+\caption{Content types for POST request}
+\label{table:POST_config}
+\end{table}
+\par*** Post request with ``Morfeas\_bundle" as Content type does not required any compression on data.
+\newpage
+The contain structure of a ``net\_config" type request present at listing~\ref{lst:net_config}.
+\begin{lstlisting}[frame=single,caption=Structure of contents for POST request with ``contents\_type:net\_config",label=lst:net_config]
+{
+  "hostname":"Computer's Hostname",
+  "mode":"DHCP"|"Static",//Internet configuration
+  "ip":###,"mask":#,"gate":###, <- Used if mode == "Static"
+  "ntp":###,//IPv4 of NTP server
+  "CAN_ifs"://Only if CANBus adapters are available
+    [
+     {
+       "if_Name":"Name of CANBus interface",
+       "bitrate":#//In bits per second
+     },
+     ....
+    ]
+}
+\end{lstlisting}
+
+***The variables that present settings that will not be configured can be excluded from the object.\\
+\#Every variable that representing IPv4 stored as signed integer number that presenting the 32 bit's of the IPv4 address in big-endian form.\\
+eg. The IPv4 \textbf{``100.45.78.10"} will represent by $\mathbf{(1680690698)_d}$.\\
+
+The data contents of a POST request with with contents\_type:``Morfeas\_config" is send in XML format that follow the standard of the Morfeas System.
+More information for this at reference guide of the Morfeas Core project.
+
+The data contents of a POST request with with contents\_type:``ISOstandard" is also send in XML format, an example of the structure for this derived at listing~\ref{lst:ISOStandard}.\\
+Every child node of node ``points" is present an ISOStandard, then name tag of each is the name that will used as ISOChannel. The children of every ISOStandard must be four in total
+with tags \textbf{description, unit, max, min} in this order. The content of every child represent each name tag.
+
+\begin{lstlisting}[frame=single,caption=Structure of contents for POST request with ``contents\_type:ISOstandard",label=lst:ISOStandard]
+<?xml version="1.0" encoding="UTF-8"?>
+<root>
+  <points>
+    <ISOStandard_name_tag>
+      <description>Description of ISOStandard</description>
+      <unit>Default Unit</unit>
+      <max>Maximum value</max>
+      <min>Minumum value</min>
+    </ISOStandard_name_tag>
+    ....
+  </points>
+</root>
+\end{lstlisting}
+
+Post request with contents\_type:Morfeas\_bundle used to upload and reconfigure the Morfeas System and the ISOChannel of the Morfeas OPC-UA server on a previous state.
+The contents of this request type is a binary .mbl file. Also this request does not required any compression of the contents.\\
+
+The last two request ``reboot" and ``shutdown" used in order to reboot and shutdown the computer respectively.\\
+
+The return of the script in success will be a JSON report for ``net\_conf" and ``Morfeas\_config" contents\_type and a human readable string for ``ISOstandard", ``Morfeas\_bundle".
+In case of failure the script will answer with a human readable string with the error that cause it to fail, or with an ``HTML ERROR 404" in case that the contents\_type is unknown.
+
+\subsection{Morfeas\_dbus\_proxy.php}
+The Morfeas\_dbus\_proxy.php is a PHP script part of the Morfeas WEB project that made to act as a proxy between the WEB and the Morfeas components that have D-BUS functionality.
+This script can be called from ``./morfeas\_php/morfeas\_dbus\_proxy.php" and accepting only POST requests. The POST request which is send to this script must contain an argument ``arg"
+with value a JSON object (example~\ref{lst:dbus_proxy}) that will give to the script the information of to which Morfeas component the data will go,
+the type of the device that will be handled, the D-BUS method that will be called and the contents of the D-BUS message.
+
+\begin{lstlisting}[frame=single,caption=Structure of contents for POST request for Morfeas\_dbus\_proxy.php,label=lst:dbus_proxy]
+{
+  "handler_type":"Morfeas Handler component name",
+  "dev_name":"Device name",
+  "method":"D-BUS method",
+  "contents":{"Object with the data that will send to handler"}
+}
+\end{lstlisting}
+
+\subsection{Morfeas\_SDAQnet\_proxy.php}
+The Morfeas\_SDAQnet\_proxy.php is a PHP script part of the Morfeas WEB project that act as proxy between the WEB and the SDAQ device that exist on a SDAQnet.
+It's can be called from ``./morfeas\_php/morfeas\_SDAQnet\_proxy.php" and accepting POST and GET requests.
+The main purpose of usage of this script is to transact calibration data between SDAQs and WEB.
+At the following subsections the functionality for each type of request and the data that exchanged will be described in details.\\
+
+The Morfeas\_SDAQnet\_proxy.php using internally the functionality of SDAQ\_psim and SDAQ\_worker.
+So it's necessary the SDAQ\_worker project to be properly compiled and installed.
+
+\subsubsection{GET request}
+The GET requests for this script can be called with two sets of arguments: ``UNITs" or (``SDAQnet" \& ``SDAQaddr").
+
+Calling for argument ``UNITs" done without any value and get as return a JSON object that contains an integer with the base offset and
+a table with the unit's strings (listing~\ref{lst:SDAQ_units}). The ``Content-Type" field for a success call is ``Morfeas\_SDAQ\_units/json".
+On failure the script return a human readable message with the error that occurred, the ``Content-Type" on this case shall be ``report/text".
+
+Calling with arguments ``SDAQnet"\&``SDAQaddr" needs values on each argument, the specific name of the SDAQnet port and the current address of the SDAQ device that the request related.
+When the Morfeas\_SDAQnet\_proxy.php receive successfully this arguments will attempt to get the calibration information of the specified SDAQ.
+If the device is available and answer at the request the script will forward the calibration data to the caller.
+The return of the script on success will identified from the ``Content-Type" field of the http header where will have value of ``Morfeas\_SDAQ\_calibration\_data/xml",
+and the contents will be a XML object that will caring out all the calibration information of the device (example shown at listing~\ref{lst:SDAQ_calib_info}).
+In case that some error occurred at the communication the script will return a human readable message with the description of the failure,
+in this case the ``Content-Type" field will be ``report/text".
+
+If the script called without any of the required arguments it shall respond with ``HTTP ERROR 404".
+
+\subsubsection{POST request}
+The POST request of Morfeas\_SDAQnet\_proxy.php script work in conjunction with the GET request that have called with arguments ``SDAQnet" \& ``SDAQaddr".
+The POST request for this script required the payload contents to be JSON in a string form that have been structured as shown at listing~\ref{lst:post_struct}.
+The property "XMLcontent" shall contain the modified version of the calibration XML as described at~\ref{subsubsec:post_xml_contents}.
+The payload must be compress before it's send to the server.\\
+If the POST request called without payload ``HTTP ERROR 404" will return, or if the payload is invalid an error message shall return.
+\newpage
+\begin{lstlisting}[frame=single,caption=Return of call with argument ``UNITs",label=lst:SDAQ_units]
+{
+  "Base_offset": ##, //Unit_code of first unit after Base units region.
+  "SDAQ_UNITs": [...] //Table with strings of specific units.
+}
+\end{lstlisting}
+\begin{lstlisting}[frame=single,caption=Return of call with arguments ``SDAQnet"\&``SDAQaddr",label=lst:SDAQ_calib_info]
+<?xml version="1.0" encoding="UTF-8"?>
+<SDAQ>
+  <SDAQ_info>
+    <SerialNumber>#######</SerialNumber>
+    <Type>"SDAQ_type"</Type>
+    <Firmware_Rev>#</Firmware_Rev>
+    <Hardware_Rev>#</Hardware_Rev>
+    <Available_Channels>#CHnnn</Available_Channels>
+    <Samplerate>10</Samplerate>
+    <Max_num_of_cal_points>#Nnn</Max_num_of_cal_points>
+  </SDAQ_info>
+  <Calibration_Data>
+    <CH1>
+      <Calibration_date>yyyy/mm/dd</Calibration_date>
+      <Calibration_Period>#</Calibration_Period>
+      <Used_Points>#</Used_Points>
+      <Unit>"Physical Unit of channel"</Unit>
+      <Points>
+        <Point_0>
+          <Measure>#.#</Measure>
+          <Reference>#.#</Reference>
+          <Offset>#.#</Offset>
+          <Gain>#.#</Gain>
+          <C2>#.#</C2>
+          <C3>#.#</C3>
+        </Point_0>
+        ...
+        <Point_(Nnn-1)>
+          ...
+        </Point_(Nnn-1)>
+      </Points>
+    </CH1>
+    <CHnnn>
+    ...
+    </CHnnn>
+  </Calibration_Data>
+</SDAQ>
+\end{lstlisting}
+\begin{lstlisting}[frame=single,caption=Structure of Data for Post request",label=lst:post_struct]
+"{
+  "SDAQnet": "String with SDAQnet name",
+  "SDAQaddr": ##, //Current Address of SDAQ.
+  "XMLcontent": "String with SDAQ calibration configuration xml"
+}"
+\end{lstlisting}
+\newpage
+\subsubsection{``XMLcontent" parameter for POST request}
+\label{subsubsec:post_xml_contents}
+The property XMLcontent of the JSON object for the POST request contain a string with the modified version of the calibration xml for the SDAQ under configuration.
+This must follow the same structure like the return of a GET request called with arguments ``SDAQnet" \& ``SDAQaddr" as in listing~\ref{lst:SDAQ_calib_info}.
+However the following changes are applied:
+\begin{itemize}
+	\item The node ``SDAQ\_info" must contains the same sub-nodes and contains as have been received.
+	\item The node ``Calibration\_Data" must contain \textbf{only} the channels(CH\_\#) nodes that will configured.
+	\item The CH\_\# contain ``Calibration\_date", ``Calibration\_Period", ``Used\_Points", ``Unit" and ``Points".
+		\begin{itemize}
+			\item Node ``Points" contains sub-nodes ``$Point\_(N_{nn})$" with $nn$ ranged $0..\text{Used\_Points}-1$.
+			\begin{itemize}
+				\item Each ``$Point\_(N_{nn})$" contain:
+				\begin{enumerate}
+					\item ``Measure" (Raw measured value)
+					\item ``Reference" (Calibrated measure value)
+					\item ``Offset" (Point's calibration range Offset)
+					\item ``Gain" (Range gain)
+					\item ``C2" (Range $x^2$ factor)
+					\item ``C3" (Range $x^3$ factor)
+				\end{enumerate}
+			\end{itemize}
+			\item In case that the ``Used\_Points" have zero value the ``Points" must exist and be empty.
+		\end{itemize}
+\end{itemize}

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="shortcut icon" type="image/x-icon" href="../art/Morfeas_logo_yellow.ico">
+<link rel="stylesheet" href="../External_components/js-treeview/dist/treeview.min.css">
+<style>
+.tree_div{
+	border-style: double;
+	border-spacing: 50% 2em;
+	margin: 0 auto;
+	overflow-y: auto;
+	height: 4in;
+	width: 2.25in;
+}
+.meas_stat_info_tab_div{
+	border-style: double;
+	border-spacing: 50% 2em;
+	margin: 0 auto;
+	overflow-y: auto;
+	height: 2in;
+	width: 4.25in;
+}
+</style>
+<title>Morfeas SDAQ Portal</title>
+</head>
+<body>
+	<table style="margin:center;">
+	<tr>
+		<td style="text-align:center;">SDAQnet:
+			<select id="SDAQnet_name_sel" onchange="request_mode = mode_enum.SDAQnet_contents; update_tree=true">
+				<option value='0'>None</option>
+			</select>
+		</td>
+		<td id="Det_devs" name="SDAQnet_stats" hidden></td>
+		<td id="Bus_util" name="SDAQnet_stats" hidden></td>
+		<td id="Bus_Voltage" name="SDAQnet_stats" hidden></td>
+		<td id="Bus_Amperage" name="SDAQnet_stats" hidden></td>
+	</tr>
+	</table>
+	<table style="margin:auto;text-align:center;margin-bottom:.075in;width:5in;">
+		<tr>
+			<th colspan="5" style="font-size: 200%;">SDAQs WEB Portal</th>
+		</tr>
+		<tr>
+			<td colspan="4">Status<br><input id="status" style="text-align:center;" type="textbox" size="40" value="Init" readonly></td>
+		</tr>
+	</table>
+	<table id ="SDAQs" style="margin:auto;text-align:center;margin-bottom:.075in;width:90%;">
+		<tr style="vertical-align:middle;">
+			<td rowspan="2" style="width:30%">
+				<div><!-- style="margin-left:.25in;text-align:left">-->
+					<button type="button" onclick="if(dev_tree) dev_tree.collapseAll();">Collapse All</button>
+				</div>
+				<div class="tree_div" id="Dev_tree"></div>
+			</td>
+			<td>
+				<table class="meas_stat_info_tab_div" id="stat_info_table"></table>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<table class="meas_stat_info_tab_div" id="meas_table"></table>
+			</td>
+			<!--<canvas id="data_plot_canvas" width="600" height="400" style="border:1px solid #000000;"></canvas>-->
+		</tr>
+	</table>
+	<footer style="bottom:0;width:99%;">
+		<p>Author: Sam Harry Tzavaras &#169; 12019-12022<br>
+		<a href="../LICENSE">License: AGPLv3</a><br>
+	</footer>
+</body>
+<script src="../External_components/js-treeview/dist/treeview.min.js"></script>
+<script src='../morfeas_ecma/morfeas_web_if.js'></script>
+<script src="../morfeas_ecma/common.js"></script>
+<script src="./SDAQsPortal.js"></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12019-12022  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+"use strict";
+	comp_check();
+	var mode_enum = {
+		SDAQnet_name: 0,
+		SDAQnet_contents: 1
+	};
+	var data_req=false, update_tree=false;
+	var request_mode = mode_enum.SDAQnet_name;
+	var cal_table_wins = [], up_firm_wins = [];
+
+	//AJAX response handler
+	var xhttp = new XMLHttpRequest();
+	xhttp.timeout = 2000;
+	xhttp.onreadystatechange = function()
+	{
+		if(this.readyState == 4 && this.status == 200)
+		{
+			data_req=false;
+			switch(request_mode)
+			{
+				case mode_enum.SDAQnet_name:
+					var resp = JSON.parse(this.responseText);
+					var selector = document.getElementById("SDAQnet_name_sel");
+					for(var i=0; i<resp.logstats_names.length; i++)
+					{
+						if(resp.logstats_names[i].includes("SDAQs"))
+						{
+							var opt = document.createElement("option");
+							opt.text = resp.logstats_names[i].slice(14, resp.logstats_names[i].indexOf("."));
+							selector.add(opt);
+						}
+					}
+					break;
+				case mode_enum.SDAQnet_contents:
+					if(this.getResponseHeader("Content-Type")==="application/json")
+					{
+						let SDAQnet_data;
+						try{ SDAQnet_data = JSON.parse(this.responseText); }
+						catch(e){
+							document.getElementById("status").value = "Error: " + e.message;
+							break;
+						}
+						document.getElementById("status").style.color='black';
+						let last_update_time = new Date(SDAQnet_data.logstat_build_date_UNIX*1000);
+						document.getElementById("status").value = "Last Update: "+last_update_time.toLocaleDateString()+' '+last_update_time.toLocaleTimeString();
+						if(SDAQnet_data.Detected_SDAQs!=this.prev_Detected_SDAQs && !SDAQnet_data.Incomplete_SDAQs)
+						{
+							update_tree = true;
+							this.prev_Detected_SDAQs = SDAQnet_data.Detected_SDAQs;
+						}
+						data_update(SDAQnet_data, update_tree);
+						update_tree = false;
+					}
+					break;
+			}
+		}
+		else if(this.status == 404)
+		{
+			data_req=false;
+			document.getElementById("status").style.color='red';
+			document.getElementById("status").value = "Not found return";
+		}
+	};
+	xhttp.ontimeout = function(){
+		document.getElementById("status").style.color='blue';
+		document.getElementById("status").value = "Connection Timeout";
+		data_req=false;
+	};
+	//request names of available logstats
+	xhttp.open("GET", "/morfeas_php/morfeas_web_if.php?COMMAND=logstats_names", true);
+	xhttp.send();
+	//timer of getting data
+	setInterval(SDAQ_data_req, 1000);
+	function SDAQ_data_req()
+	{
+		if(!data_req)
+		{
+			let selector = document.getElementById("SDAQnet_name_sel");
+			if(selector.selectedIndex)
+			{
+				xhttp.open("GET", "/ramdisk/logstat_SDAQs_"+selector.value+".json"+"?q="+makeid(), true);
+				xhttp.send();
+				data_req = true;
+			}
+			else
+			{
+				let SDAQnet_stats = document.getElementsByName("SDAQnet_stats");
+				for(let i=0; i<SDAQnet_stats.length; i++)
+					SDAQnet_stats[i].hidden=true;
+				document.getElementById("status").value = "Select SDAQnet";
+				update_tree=false;
+				document.getElementById('Dev_tree').innerHTML="";
+				document.getElementById("stat_info_table").innerHTML="";
+				document.getElementById("meas_table").innerHTML="";
+			}
+		}
+	}
+	//Close popup windows
+	function close_all_popup()
+	{
+		if(cal_table_wins.length)
+			for(let i=0; i<cal_table_wins.length; i++)
+				if(!cal_table_wins[i].closed)
+					cal_table_wins[i].close();
+		if(up_firm_wins.length)
+			for(let i=0; i<up_firm_wins.length; i++)
+				if(!up_firm_wins[i].closed)
+					up_firm_wins[i].close();
+	};
+	window.onbeforeunload = close_all_popup;
+//@license-end
+</script>
+</html>

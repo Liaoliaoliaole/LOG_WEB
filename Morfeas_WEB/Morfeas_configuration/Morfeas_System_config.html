@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="shortcut icon" type="image/x-icon" href="/art/Morfeas_logo_yellow.ico">
+<link rel="stylesheet" type="text/css" href="Morfeas_System_config.css">
+<title>Morfeas WEB</title>
+</head>
+<body onunload="destroy_child_wins()">
+<div class="content">
+	<table style="margin:auto;text-align:center;margin-bottom:.075in;">
+	  <tr>
+		<th colspan="4" style="font-weight: bold; font-size: xx-large">System Configuration</th>
+	  </tr>
+	  <tr>
+		<td><input type="button" value="Morfeas system" onclick="disp_sel(disp_mode.cnf)"></td>
+		<td><input type="button" value="ISOstandards" onclick="disp_sel(disp_mode.std)"></td>
+		<td><input type="button" value="Up/DownLoad" onclick="disp_sel(disp_mode.ud)"></td>
+	  </tr>
+	</table>
+</div>
+<div name="tab" style="width: 100%; overflow: hidden; display:none"><!--Morfeas system config-->
+    <div style="width:30%;float:left;">
+		<b id="rem" style="margin-left:15%"></b>
+		<ul id="Comp_UL"></ul>
+		<div style="margin-left:10%;">
+			<input type="button" value="Add" onclick='add_comp()'>
+			<input type="button" value="Remove" onclick="delete_selected_Morfeas_comp()">
+			<input type="button" value="Save" onclick="save_morfeas_config()">
+		</div>
+	</div>
+    <div style="width:70%;float:right;">
+		<table id="comp_args"></table>
+	</div>
+</div>
+<div name="tab" style="width:100%; overflow:hidden; display:none"><!--ISOstandards-->
+	<table id="ISO_std_table" style="margin:auto;text-align:left;margin-bottom:.075in;"></table>
+</div>
+<div name="tab" style="width:100%; overflow:hidden; display:none"><!--Up/DownLoad-->
+	<table style="margin:auto;text-align:left;margin-bottom:.075in;">
+		<th>ISOstandard Up/DownLoad</th>
+		<tr>
+			<td>
+				<input type="file" id="isoSTD_xml_file" accept=".xml" onchange="isoSTD_xml_file_val(this)">
+				<input type="button" value="Upload" onclick="isoSTD_upload()">
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="prog_bar" id="prog_bar_label">Validation progress:</label>
+				<progress id="prog_bar" value="0" max="100"></progress><b id="prog"></b>
+			</td>
+		</tr>
+		<tr>
+			<td><input type="button" value="Download" onclick="isoSTD_download()"></td>
+		</tr>
+		<th>Morfeas Bundles Up/DownLoad</th>
+		<tr>
+			<td>
+				<input type="file" id="bundle_file" accept=".mbl">
+				<input type="button" value="Upload" onclick="bundle_upload()">
+			</td>
+		</tr>
+		<tr>
+			<td><input type="button" value="Download" onclick="bundle_download()"></td>
+		</tr>
+	</table>
+</div>
+<footer id="footer">
+	<div style="float:left;margin-top:.25in;">
+		Author: Sam Harry Tzavaras &#169; 12019-12022<br>
+		<a href="../LICENSE">License: AGPLv3</a><br>
+	</div>
+</footer>
+</body>
+<script src='../morfeas_ecma/common.js'></script>
+<script src='./Morfeas_System_config.js'></script>
+<script src='./isoSTD_xml_file_validation.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12019-12020  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU AGPL for more details.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+"use strict";
+comp_check();
+const disp_mode = {
+   cnf: 0,
+   std: 1,
+   ud: 2
+};
+Object.freeze(disp_mode);
+
+var child_wins = new Array();
+var can_ifs_names;
+var listNode = document.getElementById("Comp_UL");
+var rem=document.getElementById("rem");
+//Vars for Morfeas_config tab
+var curr_morfeas_config_xml, new_morfeas_config_xml, morfeas_config_xml;
+var comp_args_table = document.getElementById("comp_args");
+//Vars for ISOstandards tab
+var curr_ISOstd_xml;
+var isoSTD_table=document.getElementById("ISO_std_table");
+
+var curr_tab=-1;//Var for tabs state
+document.getElementById('isoSTD_xml_file').value = "";
+document.getElementById('bundle_file').value = "";
+//AJAX object for configuration receive and send
+var xhttp = new XMLHttpRequest();
+xhttp.timeout = 5000;
+xhttp.onreadystatechange = function()
+{
+	if(this.readyState == 4)
+	{
+		if(this.status == 200)
+		{
+			if(this.getResponseHeader("Content-Type")==="Morfeas_config/xml")
+			{
+				if(curr_tab === disp_mode.cnf)
+				{
+					if(!this.responseXML)
+						morfeas_config_xml = (new DOMParser()).parseFromString(this.responseText, "application/xml");
+					else
+						morfeas_config_xml = this.responseXML;
+					curr_morfeas_config_xml = morfeas_config_xml.getElementsByTagName("COMPONENTS")[0];
+					new_morfeas_config_xml = (new DOMParser()).parseFromString((new XMLSerializer()).serializeToString(morfeas_config_xml), "application/xml");
+					new_morfeas_config_xml = new_morfeas_config_xml.getElementsByTagName("COMPONENTS")[0];
+					morfeas_comp_list(listNode, new_morfeas_config_xml, curr_morfeas_config_xml, document.getElementById("rem"));
+				}
+			}
+			else if(this.getResponseHeader("Content-Type")==="ISOstandard/xml")
+			{
+				if(curr_tab === disp_mode.std)
+				{
+					if(!this.responseXML)
+						curr_ISOstd_xml = (new DOMParser()).parseFromString(this.responseText, "application/xml").getElementsByTagName("points")[0];
+					else
+						curr_ISOstd_xml = this.responseXML.getElementsByTagName("points")[0];
+					isoSTD_develop(isoSTD_table, curr_ISOstd_xml);
+				}
+			}
+			else if(this.getResponseHeader("Content-Type")==="getCANifs_names/json")
+				can_ifs_names = JSON.parse(this.responseText);
+			else if(this.getResponseHeader("Content-Type")==="report/json")
+			{
+				let report = JSON.parse(this.responseText);
+				if(report.report)
+				{
+					curr_morfeas_config_xml = new_morfeas_config_xml;
+					alert("New Configuration is saved!!!\nMorfeas System restarted!!!");
+					location.reload();
+				}
+			}
+			else
+				alert(this.responseText);
+		}
+		else if(this.status == 500)
+			alert("FATAL Error on server!!!");
+	}
+};
+xhttp.ontimeout = function(){
+	alert("Client: Communication Error!!!");
+};
+//get CAN-IFs names
+if(!can_ifs_names)
+{
+	xhttp.open("GET", "../morfeas_php/config.php"+"?COMMAND=getCANifs_names", true);
+	xhttp.send();
+}
+function disp_sel(mode)
+{
+	if(mode === curr_tab)
+		return;
+	var tabs = document.getElementsByName("tab");
+	tabs.forEach(tab=>{tab.style.display="none"});
+	switch(mode)
+	{
+		case disp_mode.cnf:
+			if(!curr_morfeas_config_xml)
+			{
+				xhttp.open("GET", "../morfeas_php/config.php"+"?COMMAND=getMorfeasConfig", true);
+				xhttp.send();
+			}
+			tabs[disp_mode.cnf].style.display="block";
+			break;
+		case disp_mode.std:
+			if(!curr_ISOstd_xml)
+			{
+				xhttp.open("GET", "../morfeas_php/config.php"+"?COMMAND=getISOstandard", true);
+				xhttp.send();
+			}
+			tabs[disp_mode.std].style.display="block";
+			break
+		case disp_mode.ud:
+			tabs[disp_mode.ud].style.display="block";
+			break
+	}
+	curr_tab = mode;
+}
+function add_comp()
+{
+	if(!new_morfeas_config_xml)
+		return;
+	if(new_morfeas_config_xml.childNodes.length<Morfeas_comp_amount_max)
+		child_wins.push(PopupCenter("./morfeas_component_add.html"+"?q="+makeid(),"","600","300"));
+	else
+		alert("Maximum amount of component reached!!!");
+}
+function destroy_child_wins()
+{
+	if(child_wins.length == 0)
+		return;
+	for(let i=0; i<child_wins.length; i++)
+		if(!child_wins[i].closed)
+			child_wins[i].close();
+}
+window.onbeforeunload = function(){
+	if(new_morfeas_config_xml&&curr_morfeas_config_xml)
+	{
+		if(new_morfeas_config_xml.textContent.localeCompare(curr_morfeas_config_xml.textContent))
+			return "Configuration is Not Saved!!!";
+	}
+	return;
+}
+//@license-end
+</script>
+</html>

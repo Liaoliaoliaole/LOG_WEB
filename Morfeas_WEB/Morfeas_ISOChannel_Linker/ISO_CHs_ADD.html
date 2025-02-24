@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="../External_components/autoComplete.js/dist/css/autoComplete.01.css">
+<link rel="shortcut icon" type="image/x-icon" href="/art/Morfeas_logo_yellow.ico">
+<style>
+.center_screen{
+	position: absolute;
+	left: 50%;
+	transform: translate(-50%);
+}
+</style>
+<title>Morfeas WEB Multiple Links Creator</title>
+</head>
+<body>
+<div class="center_screen">
+	<table style="margin:auto;text-align:center;margin-bottom:.075in">
+		<tr>
+			<th colspan="5" style="font-size: 200%;">Multiple Links <br>Creator</th>
+		</tr>
+		<tr>
+			<td colspan="4"><input id="status_tab" style="text-align:center;" type="textbox" size="25" value="Select type" readonly></td>
+		</tr>
+	</table>
+	<table style="margin:auto;text-align:left;margin-bottom:.075in;width:90%;">
+		<tr>
+			<td>
+				<label for="type_selector">Type:</label>
+			</td>
+			<td>
+				<select name="link_data" id="type_selector" onchange="type_selector_changed(this);">
+					<option>-</option>
+					<option>SDAQ</option>
+					<!--<option>IOBOX</option>-->
+				</select>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="conn">Sensor's Path:</label>
+			</td>
+			<td>
+				<div class="autoComplete_wrapper">
+					<input name="link_data"
+						   id="conn"
+						   onchange="conn_inp_val(this);"
+						   size="30"
+						   maxlength="30"
+						   disabled>
+					</input>
+					<button id="sensor_search" onclick="sensor_search_func();" disabled>&#128269;</button>
+				</div>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="iso_name">ISO Code:</label>
+			</td>
+			<td>
+				<div class="autoComplete_wrapper">
+					<input name="link_data"
+						   id="iso_name"
+						   placeHolder="Search..."
+						   onchange="iso_name_val(this);"
+						   onfocusout="vals_check()"
+						   size="20"
+						   maxlength="20"
+						   disabled>_
+					<select id="iso_code_post_fix"
+							disabled>
+					</select>
+				</div>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="range">Range:</label>
+			</td>
+			<td>
+				<input name="link_data"
+					   id="range"
+					   type="number"
+					   size="2"
+					   min=1
+					   onchange="range_check(this); vals_check()"
+					   disabled>
+				</input>
+			</td>
+		</tr>
+		<tr>
+			<td colspan="1"></td>
+			<td>
+				<button id="send_button" onclick="send();" disabled>Send</button>
+				<button onclick="window.close('','_parent','');">Cancel</button>
+			</td>
+		</tr>
+	</table>
+<div>
+</body>
+<script src="../External_components/autoComplete.js/dist/js/autoComplete.min.js"></script>
+<script src='../morfeas_ecma/common.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12021-12023  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+"use strict";
+comp_check();
+var	curr_iso_channels, curr_iso_standards, curr_logstats_comb;
+var search_win,
+	sel_dev_anchor,
+	conn_autocomplete,
+	ISOname_autocomplete,
+	unit_inp,
+	available_dev_paths;
+
+var post_fix = document.getElementById("iso_code_post_fix"),
+	link_data = document.getElementsByName("link_data"),
+	sensor_search = document.getElementById("sensor_search"),
+	send_button = document.getElementById("send_button"),
+	status_tab = document.getElementById("status_tab"),
+	range = document.getElementById("range");
+
+var type = document.getElementById("type_selector"),
+	conn = document.getElementById("conn"),
+	iso_name = document.getElementById("iso_name");
+
+//Checks and Initialization
+if(!curr_iso_standards || !curr_iso_channels)
+{
+	if(!curr_iso_standards && curr_iso_channels)
+		alert("No ISOStandard!!!");
+	window.close('','_parent','');
+}
+//Populate post_fix.
+for(let i=0; i<=20; i++)
+{
+	let text = i?i:'N/A',
+		new_postfix_opt = document.createElement('option'),
+		opt_text = document.createTextNode(text);
+	new_postfix_opt.appendChild(opt_text);
+	new_postfix_opt.setAttribute('value', text);
+	post_fix.appendChild(new_postfix_opt);
+}
+
+function vals_check()
+{
+	let okay = false;
+
+	status_tab.value = !type.selectedIndex?"Select Type":"Define sensor's path and ISO Code";
+	status_tab.style.color='black';
+	iso_name.style.color = 'black';
+	if(iso_name.value && !curr_iso_standards.iso_standard_xml.xml_data.getElementsByTagName(iso_name.value).length)
+		iso_name.style.color = 'red';
+	if(conn.value && iso_name.value && range.value &&
+	   conn.style.color=='black' && iso_name.style.color=='black')
+		okay = true;
+	send_button.disabled = !(okay);
+}
+
+function range_check(elem)
+{
+	if(elem.valueAsNumber < elem.min)
+		elem.valueAsNumber = elem.min;
+}
+
+function conn_inp_val(elem)
+{
+	let conn_found_fl = false;
+	elem.value = elem.value.replace(/\s/g, '');
+	elem.style.color = 'black';
+	sensor_search.disabled = false;
+	if(!elem.value)
+	{
+		for(let i=2; i<link_data.length; i++)
+			link_data[i].disabled = true;
+		return;
+	}
+	for(let i=0; i<curr_iso_channels.length; i++)
+	{
+		if(elem.value == curr_iso_channels[i].conn ||
+     	   curr_iso_channels[i].anchor == sel_dev_anchor)
+		{
+			elem.style.color='red';
+			sel_dev_anchor = '';
+			for(let i=2; i<link_data.length; i++)
+				link_data[i].disabled = true;
+			vals_check();
+			return;
+		}
+	}
+	if(conn_autocomplete)
+	{
+		for(let i=0; i<conn_autocomplete.data.src.length; i++)
+		{
+			if(elem.value == conn_autocomplete.data.src[i].sensorUserId)
+			{
+				conn_found_fl = true;
+				unit_inp = conn_autocomplete.data.src[i].unit;
+			}
+		}
+	}
+	if(!conn_found_fl)
+	{
+		elem.style.color='red';
+		sel_dev_anchor = '';
+		for(let i=2; i<link_data.length; i++)
+			link_data[i].disabled = true;
+		vals_check();
+		return;
+	}
+	//Enable input fields.
+	for(let i=2; i<link_data.length; i++)
+		link_data[i].disabled = false;
+	post_fix.disabled = false;
+	if(curr_iso_standards.iso_standard_xml)
+	{	//Populate ISOname_autocomplete.
+		let recommented_ISOChannels = curr_iso_standards.get_isostandard_by_unit(unit_inp);
+		if(recommented_ISOChannels)
+		{
+			ISOname_autocomplete = new autoComplete({
+				selector: "#iso_name",
+				data: {
+					src: recommented_ISOChannels,
+					key: ["iso_code_and_desc"]
+				},
+				resultsList: {
+					maxResults: 128
+				},
+				resultItem: {
+					highlight: {render: true}
+				},
+				onSelection: function(fb){
+					post_fix.selectedIndex=0;
+					iso_name.value = fb.selection.value.attributes.iso_code;
+					elem.style.color = 'black';
+					vals_check();
+				}
+			});
+		}
+	}
+	vals_check();
+	//Disable sensor_search
+	sensor_search.disabled = true;
+	if(search_win && !search_win.closed)
+		search_win.close();
+}
+function iso_name_val(elem)
+{
+	elem.value = elem.value.replace(/[.\s]/g, '');
+	if(!elem.value)
+		post_fix.selectedIndex = 0;
+	vals_check();
+}
+
+//Callback Functions
+function type_selector_changed(sel)
+{
+	sel_dev_anchor = undefined;
+	if(search_win && !search_win.closed)
+		search_win.close();
+	for(let i=1; i<link_data.length; i++)
+	{
+		link_data[i].value = '';
+		link_data[i].disabled = true;
+	}
+	post_fix.disabled = true;
+	if(!sel.selectedIndex)
+	{
+		send_button.disabled = true;
+		sensor_search.disabled = true;
+		conn.placeholder = '';
+		conn.style.textAlign="left";
+		vals_check();
+		return;
+	}
+	link_data[1].disabled=false;
+	sensor_search.disabled = false;
+	//Populate conn_autocomplete.
+	available_dev_paths = get_available_devs(curr_logstats_comb, sel.value, curr_iso_channels);
+	if(available_dev_paths && available_dev_paths.length)
+	{
+		conn_autocomplete = new autoComplete({
+			selector: "#conn",
+			data: {
+				src: available_dev_paths,
+				key: ["sensorUserId"],
+				cache: true
+			},
+			resultsList: {
+				maxResults: 128
+			},
+			resultItem: {
+				highlight: {render: true}
+			},
+			onSelection: function(fb){
+				conn.value = fb.selection.value.sensorUserId;
+				sel_dev_anchor = fb.selection.value.anchor;
+				conn.style.color = 'black';
+				conn_inp_val(conn);
+			}
+		});
+		switch(sel.value)
+		{
+			case "SDAQ":
+				conn.placeholder = "CAN-if.Addr:XX.CH:XX";
+				break;
+			case "IOBOX":
+				conn.placeholder = "DEV_NAME.RX:X.CH:XX";
+				break;
+		}
+		conn.style.textAlign="left";
+	}
+	else
+	{
+		conn.placeholder = "No devs available";
+		conn.style.textAlign="center";
+	}
+}
+
+function sensor_search_func()
+{
+	if(!search_win || search_win.closed)
+	{
+		search_win = PopupCenter("./dev_search.html"+"?q="+makeid(), "", 400, 500);
+		search_win.dev_type = type.value;
+		search_win.curr_iso_channels = curr_iso_channels;
+		search_win.okay_callback_func = function(sel_data){
+			if(!sel_data)
+				return;
+			sel_dev_anchor = sel_data.Anchor;
+			conn.value = sel_data.path;
+			conn.onchange();
+		};
+	}
+	else
+		search_win.focus();
+}
+
+//Send function.
+function send()
+{
+	let now_time = new Date();
+	let post_msg_contents = {COMMAND: "ADD", DATA: []}, dev_CHs=[],
+		t_iso_name, t_iso_name_num, sensor_path_comp,
+		xml_data = curr_iso_standards.iso_standard_xml.xml_data;
+
+	sensor_path_comp = conn.value.split('.');
+	sensor_path_comp.first_CH = parseInt(sensor_path_comp[2].replace(/\D+/g, ''));
+	for(let i=0; i<available_dev_paths.length; i++)
+		if(available_dev_paths[i].sensorUserId.includes(sensor_path_comp[0]+'.'+sensor_path_comp[1]))
+			dev_CHs.push(available_dev_paths[i]);
+
+	t_iso_name_num = parseInt(iso_name.value.replace(/\D+/g, ''));
+	t_iso_name = iso_name.value.replace(t_iso_name_num, '');
+	for(let i=0; i<range.valueAsNumber; i++)
+	{
+		let j;
+		let new_link_data = {}, sensor_path, iso_code_data,
+			ISO_CH_name, ISO_CH_Desc, ISO_CH_max, ISO_CH_min,
+			ISO_CH_AlarmHighVal, ISO_CH_AlarmHigh, ISO_CH_AlarmLowVal, ISO_CH_AlarmLow;
+
+		for(j=0; j<dev_CHs.length; j++)
+		{
+			if(dev_CHs[j].sensorUserId == (sensor_path_comp[0]+'.'+sensor_path_comp[1]+'.CH:'+pad(sensor_path_comp.first_CH+i, 2)))
+			{
+				sensor_path = dev_CHs[j];
+				break;
+			}
+		}
+		if(j == dev_CHs.length)
+		{
+			let curr_dev_CH=sensor_path_comp[0]+'.'+sensor_path_comp[1]+'.CH:'+pad(sensor_path_comp.first_CH+i,2);
+			alert("Interation: "+(i+1)+"\nError: \""+curr_dev_CH+"\" Not found or Already in used!!!");
+			return;
+		}
+
+		iso_code_data = xml_data.getElementsByTagName(t_iso_name+(t_iso_name_num+i));
+		if(!iso_code_data.length)
+		{
+			alert("Interation: "+(i+1)+"\nError: \""+t_iso_name+(t_iso_name_num+i)+"\" Not found!!!");
+			return;
+		}
+		iso_code_data = iso_code_data[0];
+		ISO_CH_name=iso_code_data.tagName+(post_fix.selectedIndex?('_'+post_fix.value):'');
+		for(j=0; j<curr_iso_channels.length; j++)
+		{
+			if(curr_iso_channels[j].iso_name===ISO_CH_name)
+			{
+				alert("Error: \""+ISO_CH_name+"\" Already in Use!!!")
+				return;
+			}
+		}
+		ISO_CH_Desc=iso_code_data.getElementsByTagName("description")[0].textContent;
+		ISO_CH_max=iso_code_data.getElementsByTagName("max")[0].textContent;
+		ISO_CH_min=iso_code_data.getElementsByTagName("min")[0].textContent;
+		if(iso_code_data.getElementsByTagName("alarmHighVal")[0])
+			ISO_CH_AlarmHighVal=iso_code_data.getElementsByTagName("alarmHighVal")[0].textContent;
+		if(iso_code_data.getElementsByTagName("alarmHigh")[0])
+			ISO_CH_AlarmHigh=iso_code_data.getElementsByTagName("alarmHigh")[0].textContent;
+		if(iso_code_data.getElementsByTagName("alarmLowVal")[0])
+			ISO_CH_AlarmLowVal=iso_code_data.getElementsByTagName("alarmLowVal")[0].textContent;
+		if(iso_code_data.getElementsByTagName("alarmLow")[0])
+			ISO_CH_AlarmLow=iso_code_data.getElementsByTagName("alarmLow")[0].textContent;
+
+		new_link_data.Anchor = sensor_path.anchor;
+		new_link_data.IF_type = type.value;
+		new_link_data.ISOChannel = ISO_CH_name;
+		new_link_data.Description = ISO_CH_Desc+(post_fix.selectedIndex?(" Cyl:"+post_fix.value):'');
+		new_link_data.Max = ISO_CH_max;
+		new_link_data.Min = ISO_CH_min;
+		new_link_data.AlarmHighVal = ISO_CH_AlarmHighVal?ISO_CH_AlarmHighVal:ISO_CH_max;
+		new_link_data.AlarmHigh = ISO_CH_AlarmHigh?ISO_CH_AlarmHigh:"no";
+		new_link_data.AlarmLowVal = ISO_CH_AlarmLowVal?ISO_CH_AlarmLowVal:ISO_CH_min;
+		new_link_data.AlarmLow = ISO_CH_AlarmLow?ISO_CH_AlarmLow:"no";
+		new_link_data.Build_date_UNIX = Math.trunc(now_time.getTime()/1000);
+		new_link_data.Mod_date_UNIX = Math.trunc((now_time.getTime()/1000)+1);
+		post_msg_contents.DATA.push(new_link_data);
+	}
+	let post_xhttp = new XMLHttpRequest();
+
+	post_xhttp.timeout = 5000;
+	post_xhttp.ontimeout = function(){
+		status_tab.value = "Connection to server: Timeout Error";
+		status_tab.style.color='blue';
+	};
+	post_xhttp.onreadystatechange = function(){
+		if(this.readyState == 4 && this.status == 200)
+		{
+			if(this.getResponseHeader("Content-Type")==="report/text")
+			{
+				status_tab.value = this.responseText;
+				status_tab.style.color='red';
+				console.log(this.responseText);
+				alert(this.responseText);
+			}
+			else if(this.getResponseHeader("Content-Type")==="application/json")
+			{
+				let report
+				try{report = JSON.parse(this.responseText);}
+				catch{return;}
+				if(report.success)
+				{
+					if(search_win && !search_win.closed)
+						search_win.close();
+					window.close('','_parent','');
+				}
+			}
+		}
+		else if(this.status == 404)
+		{
+			status_tab.value = "Error 404: Data Not found";
+			status_tab.style.color='red';
+		}
+	};
+	post_xhttp.open("POST", "/morfeas_php/morfeas_web_if.php", true);
+	post_xhttp.send(compress(JSON.stringify(post_msg_contents)));
+}
+
+window.onbeforeunload = function()
+{
+	if(search_win && !search_win.closed)
+		search_win.close();
+};
+//@license-end
+</script>
+</html>

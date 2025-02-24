@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="shortcut icon" type="image/x-icon" href="../art/Morfeas_logo_yellow.ico">
+<title>Morfeas System Loggers</title>
+</head>
+<body>
+<table id ="main_menu" style="margin:auto;text-align:center;margin-bottom:.075in;width:4in;">
+  <tr>
+    <th colspan="5" style="font-size: 200%;">System Loggers</th>
+  </tr>
+  <tr>
+  </tr>
+  <tr>
+	<td colspan="4"><input id="status" style="text-align:center;" type="textbox" size="20" value="Morfeas Loggers" readonly></td>
+  </tr>
+  <tr>
+    <th colspan="4" style="font-size: 120%;">Main Menu</th>
+  </tr>
+  <tr>
+	<td><input type="button" value="Errors" onclick='display_mode=mode_enum_L2.Errors;Show_hide(screen_enum.Logstats);'></td>
+	<td><input type="button" value="Sensors" onclick='display_mode=mode_enum_L2.Sensors;Show_hide(screen_enum.Logstats);'></td>
+	<td><input type="button" value="Details" onclick='display_mode=mode_enum_L2.Details;Show_hide(screen_enum.Logstats);'></td>
+	<td><input type="button" value="System logs" onclick='Show_hide(screen_enum.Loggers)'></td>
+  </tr>
+</table>
+
+<!-- Loggers -->
+<table id ="loggers" style="margin:auto;">
+  <tr>
+	<td colspan="4"><code id="Logger_terminal"></code></td>
+  </tr>
+  <tr>
+	<td style="text-align:left;"><input id="download" type="button" value="Reload Logger names"
+		onclick="request_mode = mode_enum.Loggers_name;">
+	</td>
+	<td style="text-align:right;">Logger:
+		<select id="logger_select" onchange="logger_ref_req = false;">
+			<option value='0'>None</option>
+		</select>
+	</td>
+  </tr>
+</table>
+<div id ="logstats_disp" style="margin:auto; display: none;"></div>
+<footer style="bottom:0;width:99%;">
+	<p>Author: Sam Harry Tzavaras &#169; 12019-12022<br>
+	<a href="../LICENSE">License: AGPLv3</a><br>
+</footer>
+</body>
+<script src='../morfeas_ecma/morfeas_web_if.js'></script>
+<script src='../morfeas_ecma/common.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12019-12020  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+"use strict";
+comp_check();
+
+const screen_enum = {
+			  Loggers: 0,
+			  Logstats: 1,
+			},
+	  mode_enum = {
+				Loggers_name: 0,
+				Logger_content: 1,
+				Logstats: 2,
+				opcua_config: 3
+			},
+	  mode_enum_L2 = {
+				Sensors: 0,
+				Errors: 1,
+				Details: 2
+			};
+var display_mode,
+	request_mode = mode_enum.Loggers_name,
+	Logger_terminal = document.getElementById("Logger_terminal"),
+	logstats_disp = document.getElementById("logstats_disp"),
+	status_tab = document.getElementById("status"),
+	log_select = document.getElementById("logger_select"),
+	logstats, ISOChannels, logger_ref_req = false;
+Logger_terminal.innerHTML="";
+status_tab.value = "Morfeas Loggers";
+status_tab.style.color = "black";
+
+//AJAX response handler
+var xhttp = new XMLHttpRequest();
+xhttp.timeout = 900;
+xhttp.ontimeout = onTimeout;
+xhttp.onreadystatechange = onReady_State_Change;
+function onReady_State_Change()
+{
+	if(this.readyState == 4 && this.status == 200)
+	{
+		switch(request_mode)
+		{
+			case mode_enum.Loggers_name:
+				var Logger_names = JSON.parse(this.responseText);
+				log_select.options.length = 1;
+				for(var i=0; i < Logger_names.Logger_names.length; i++)
+				{
+					var opt = document.createElement("option");
+					opt.text = Logger_names.Logger_names[i];
+					log_select.add(opt);
+					request_mode = mode_enum.Logger_content;
+				}
+				break;
+			case mode_enum.Logger_content:
+				if(this.getResponseHeader("Content-Type") === "Logger/text"
+				   || (!logger_ref_req && this.getResponseHeader("Content-Type") !== "application/json"))
+				{
+					status_tab.value = "Morfeas Loggers";
+					status_tab.style.color = 'black';
+					let is_scroll_at_bottom = ((window.innerHeight+window.scrollY)>=document.body.offsetHeight);
+					Logger_terminal.innerHTML = morfeas_opcua_logger_colorizer(this.responseText);
+					if(is_scroll_at_bottom)
+						window.scrollTo(0,document.body.scrollHeight);
+					logger_ref_req = true;
+				}
+				else if(this.getResponseHeader("Content-Type") === "report/text")
+				{
+					status_tab.value = this.responseText;
+					status_tab.style.color='red';
+					logger_ref_req = false
+				}
+				break;
+			case mode_enum.opcua_config:
+				try{ISOChannels = JSON.parse(this.responseText);}
+				catch{console.log("Parsing error @ opcua_config");break;}
+				request_mode = mode_enum.Logstats;
+				break;
+			case mode_enum.Logstats:
+				try{logstats = JSON.parse(this.responseText);}
+				catch{console.log("Parsing error @ Logstats");break;}
+				if(logstats.OPCUA_Config_xml_mod)
+					request_mode = mode_enum.opcua_config;
+				logstats = morfeas_logstat_commonizer(logstats);
+				if(typeof logstats === 'object')
+				{
+					switch(display_mode)
+					{
+						case mode_enum_L2.Errors:
+						case mode_enum_L2.Sensors:
+							status_tab.value = "Sensors";
+							status_tab.style.color = 'black';
+							var sensors_table = document.createElement("TABLE");
+							sensors_table.style="margin:auto;margin-bottom:.075in;width:7in;";
+							let header_row=sensors_table.createTHead().insertRow();
+							header_row.style="text-align:center";
+							header_row.insertCell().innerHTML = "<b>#</b>";
+							header_row.insertCell().innerHTML = "<b>Type</b>";
+							header_row.insertCell().innerHTML = "<b>Name/property</b>";
+							header_row.insertCell().innerHTML = "<b>Connection</b>";
+							header_row.insertCell().innerHTML = "<b>Link</b>";
+							header_row.insertCell().innerHTML = "<b>Value</b>";
+							header_row.insertCell().innerHTML = "<b>Status</b>";
+							for(let i=0,order_num=1; i<logstats.length; i++)
+							{
+								if(logstats[i].sensors)
+								{
+									for(let j=0; j<logstats[i].sensors.length; j++,order_num++)
+									{
+										if(display_mode === mode_enum_L2.Errors)
+											if(logstats[i].sensors[j].Error_explanation === '-')
+											{
+												order_num--;
+												continue;
+											}
+										let last_row = sensors_table.insertRow(), status_cell, meas_cell;
+										last_row.insertCell().innerHTML = order_num;
+										last_row.insertCell().innerHTML = logstats[i].sensors[j].type;
+										last_row.insertCell().innerHTML = logstats[i].sensors[j].deviceUserIdentifier;
+										last_row.insertCell().innerHTML = logstats[i].sensors[j].sensorUserId;
+										last_row.insertCell().innerHTML = find_link(ISOChannels, logstats[i].sensors[j].anchor);
+										meas_cell = last_row.insertCell();
+										let unit = logstats[i].sensors[j].unit?logstats[i].sensors[j].unit:"";
+										if(typeof(logstats[i].sensors[j].avgMeasurement)==='number')
+											meas_cell.innerHTML = logstats[i].sensors[j].avgMeasurement.toFixed(3)+' '+unit;
+										else
+											meas_cell.innerHTML = '-';
+										status_cell = last_row.insertCell();
+										status_cell.innerHTML = logstats[i].sensors[j].Error_explanation;
+										if(!logstats[i].sensors[j].Is_meas_valid)
+											status_cell.style.color='red';
+									}
+								}
+							}
+							logstats_disp.textContent = '';//remove all children
+							logstats_disp.appendChild(sensors_table);
+							break;
+						case mode_enum_L2.Details:
+							status_tab.value = "Details";
+							status_tab.style.color = 'black';
+							logstats_disp.textContent = '';//remove all children
+							for(let i=0; i<logstats.length; i++)
+							{
+								if(logstats[i].connections)
+								{
+									var details_table = document.createElement("TABLE");
+									details_table.style="margin:auto;margin-bottom:.075in;width:4in;";
+									details_table.createTHead().innerHTML = logstats[i].if_name;
+									for(let j=0; j<logstats[i].connections.length; j++)
+									{
+										let last_row = details_table.insertRow();
+										last_row.insertCell().innerHTML = logstats[i].connections[j].name.replace("_UNIX", "");
+										if(logstats[i].connections[j].name.includes("UNIX"))
+										{
+											if(logstats[i].connections[j].value)
+											{
+												let date_conv = new Date(logstats[i].connections[j].value*1000);
+												last_row.insertCell().innerHTML = date_conv.toLocaleDateString();
+											}
+											else
+												last_row.insertCell().innerHTML = "UnCalibrated";
+										}
+										else
+											last_row.insertCell().innerHTML = logstats[i].connections[j].value +
+																			 (logstats[i].connections[j].unit?logstats[i].connections[j].unit:"");
+									}
+									logstats_disp.appendChild(details_table);
+								}
+							}
+							break;
+					}
+				}
+				else
+				{
+					status_tab.value = logstat;
+					status_tab.style.color = 'yellow';
+					console.log(logstat);
+				}
+				break;
+		}
+	}
+	else if(this.status == 404)
+	{
+		status_tab.value = "Error 404: Data Not found";
+		status_tab.style.color='red';
+		logger_ref_req = false
+	}
+}
+function onTimeout()
+{
+  status_tab.value = "Connection to server: Timeout Error";
+  status_tab.style.color='blue';
+  logger_ref_req = false
+}
+//Request Timer
+window.setInterval(Morfeas_request, 1000);
+function Morfeas_request()
+{
+	switch(request_mode)
+	{
+		case mode_enum.Loggers_name:
+			xhttp.open("GET", "../morfeas_php/morfeas_web_if.php?COMMAND=loggers", true);
+			xhttp.send();
+			return;
+		case mode_enum.Logger_content:
+			if(log_select.selectedIndex)
+			{
+				if(!logger_ref_req)
+				{
+					xhttp.open("GET", "/ramdisk/Morfeas_Loggers/" + log_select.value + "?q="+makeid(), true);
+					xhttp.overrideMimeType("text/html");
+				}
+				else
+					xhttp.open("GET", "../morfeas_php/morfeas_web_if.php?COMMAND=get_logger_if_updated&LOGGER_NAME=" + log_select.value + "&q="+makeid(), true);
+				xhttp.send();
+			}
+			else
+				Logger_terminal.innerHTML="";
+			break;
+		case mode_enum.Logstats:
+			xhttp.open("GET", "../morfeas_php/morfeas_web_if.php?COMMAND=logstats", true);
+			xhttp.send();
+			break;
+		case mode_enum.opcua_config:
+			xhttp.open("GET", "../morfeas_php/morfeas_web_if.php?COMMAND=opcua_config", true);
+			xhttp.send();
+			break;
+	}
+}
+function Show_hide(log_set)
+{
+	if(log_set==screen_enum.Loggers)
+	{
+		document.getElementById("loggers").style.display="table";
+		logstats_disp.style.display="none";
+		log_select.selectedIndex = 0;
+		Logger_terminal.innerHTML="";
+		request_mode = mode_enum.Loggers_name;
+	}
+	else if(log_set==screen_enum.Logstats)
+	{
+		document.getElementById("loggers").style.display="none";
+		logstats_disp.style.display="inline";
+		if(display_mode == mode_enum_L2.Details)
+			request_mode = mode_enum.Logstats;
+		else
+			request_mode = mode_enum.opcua_config;
+	}
+}
+function find_link(_ISOChannels, _anchor)
+{
+	if(!_ISOChannels || !_anchor)
+		return '-';
+	for(let i=0; i<_ISOChannels.length; i++)
+		if(_ISOChannels[i].ANCHOR === _anchor)
+			return _ISOChannels[i].ISO_CHANNEL;
+	return '-';
+}
+//@license-end
+</script>
+</html>

@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="../External_components/autoComplete.js/dist/css/autoComplete.01.css">
+<link rel="shortcut icon" type="image/x-icon" href="/art/Morfeas_logo_yellow.ico">
+<style>
+.center_screen{
+	position: absolute;
+	left: 50%;
+	transform: translate(-50%);
+}
+</style>
+<title>Morfeas WEB Link Editor</title>
+</head>
+<body>
+<div class="center_screen">
+	<table style="margin:auto;text-align:center;margin-bottom:.075in">
+		<tr>
+			<th colspan="5" style="font-size: 200%;">Edit Link</th>
+		</tr>
+	</table>
+	<table style="margin:auto;text-align:left;margin-bottom:.075in;width:90%;">
+		<tr>
+			<td>
+				<label for="type_selector">Type:</label>
+			</td>
+			<td>
+				<input id="type_selector" size="5"readonly disabled></input>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="conn">Sensor's Path:</label>
+			</td>
+			<td>
+				<div class="autoComplete_wrapper">
+					<input id="conn"
+						   onchange="conn_inp_val(this);"
+						   size="30"
+						   maxlength="30"
+						   disabled>
+					</input>
+					<button id="sensor_search" onclick="sensor_search_func();" disabled>&#128269;</button>
+				</div>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="iso_name">ISO Code:</label>
+			</td>
+			<td>
+				<div class="autoComplete_wrapper">
+					<input id="iso_name"
+						   size="20"
+						   maxlength="20"
+						   readonly
+						   disabled>
+				</div>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="desc">Description:</label>
+			</td>
+			<td colspan="2">
+				<input id="desc" size="30" onchange="vals_check()"></input>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="min">Min:</label>
+			</td>
+			<td>
+				<input id="min"
+					   type="number"
+					   size="5"
+					   onchange="min_max_alarm_checker(this)">
+				</input>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="max">Max:</label>
+			</td>
+			<td>
+				<input id="max"
+					   type="number"
+					   size="5"
+					   onchange="min_max_alarm_checker(this)">
+				</input>
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="alarmLowVal">Alarm Low:</label>
+			</td>
+			<td>
+				<input id="alarmLowVal"
+					   type="number"
+					   size="5"
+					   onchange="min_max_alarm_checker(this)">
+				</input>
+				<input type="checkbox" id="alarmLow" onchange="alarm_checkbox(this)">
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<label for="alarmHighVal">Alarm High:</label>
+			</td>
+			<td>
+				<input id="alarmHighVal"
+					   type="number"
+					   size="5"
+					   onchange="min_max_alarm_checker(this)">
+				</input>
+				<input type="checkbox" id="alarmHigh" onchange="alarm_checkbox(this)">
+			</td>
+		</tr>
+		<tr name="date_period_unit">
+			<td>
+				<label for="cal_date">Cal Date:</label>
+			</td>
+			<td>
+				<input id="cal_date"
+					   type="date"
+					   max="2255-12-31"
+					   min="2000-01-01"
+					   onchange="cal_date_changed(this);">
+				</input>
+			</td>
+		</tr>
+		<tr name="date_period_unit">
+			<td>
+				<label for="period">Cal Period:</label>
+			</td>
+			<td>
+				<input id="period"
+					   type="number"
+					   min='1'
+					   max='255'
+					   maxlength="4"
+					   size="4"
+					   onchange="period_input_changed(this);">
+				</input>
+			</td>
+		</tr>
+		<tr name="date_period_unit">
+			<td>
+				<label for="unit">Unit:</label>
+			</td>
+			<td>
+				<input id="unit"
+					   size="5"
+					   onchange="unit_val_changed(this)"
+					   disabled>
+				</input>
+			</td>
+		</tr>
+		<tr>
+			<td colspan="1"></td>
+			<td>
+				<button id="send_button" onclick="send();" disabled>Send</button>
+				<button onclick="window.close('','_parent','');">Cancel</button>
+			</td>
+		</tr>
+	</table>
+<div>
+</body>
+<script src="../External_components/autoComplete.js/dist/js/autoComplete.min.js"></script>
+<script src='../morfeas_ecma/common.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12021-12022  Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+"use strict";
+comp_check();
+var	curr_config, curr_logstats_comb, curr_iso_channels;
+var search_win,	sel_dev_anchor, conn_autocomplete, dead_conn_fl=false;
+var sensor_search = document.getElementById("sensor_search"),
+	cal_data = document.getElementsByClassName("cal_data"),
+	send_button = document.getElementById("send_button");
+var type = document.getElementById("type_selector"),
+	conn = document.getElementById("conn"),
+	iso_name = document.getElementById("iso_name"),
+	desc = document.getElementById("desc"),
+	min = document.getElementById("min"),
+	max = document.getElementById("max"),
+	alarmLowVal = document.getElementById("alarmLowVal"),
+	alarmHighVal = document.getElementById("alarmHighVal"),
+	alarmLow = document.getElementById("alarmLow"),
+	alarmHigh = document.getElementById("alarmHigh"),
+	unit_inp = document.getElementById("unit"),
+	cal_date = document.getElementById("cal_date"),
+	period = document.getElementById("period");
+
+//Checks and Initialization
+if(!curr_config)
+	window.close('','_parent','');
+mod_win_val_init();
+
+function mod_win_val_init()
+{
+	type.value = curr_config.type;
+	desc.value = curr_config.desc;
+	min.value = curr_config.min;
+	max.value = curr_config.max;
+	alarmHighVal.value = curr_config.hasOwnProperty("alarmHighVal") ? curr_config.alarmHighVal : max.value;
+	alarmLowVal.value = curr_config.hasOwnProperty("alarmLowVal") ? curr_config.alarmLowVal : min.value;
+	if(!curr_config.hasOwnProperty("alarmHigh"))
+	{
+		alarmHigh.value = 'no';
+		alarmHighVal.disabled = true;
+	}
+	else
+	{
+		alarmHigh.value = curr_config.alarmHigh;
+		if(curr_config.alarmHigh === 'yes')
+			alarmHigh.checked = true;
+		else
+			alarmHighVal.disabled = true;
+	}
+	if(!curr_config.hasOwnProperty("alarmLow"))
+	{
+		alarmLow.value = 'no';
+		alarmLowVal.disabled = true;
+	}
+	else
+	{
+		alarmLow.value = curr_config.alarmLow;
+		if(curr_config.alarmLow === 'yes')
+			alarmLow.checked = true;
+		else
+			alarmLowVal.disabled = true;
+	}
+
+	iso_name.value = curr_config.iso_name;
+	if(curr_config.status === "OFF-Line" || curr_config.status === "Disconnected")
+		dead_conn_fl = true;
+	else
+	{
+		conn.value = curr_config.conn;
+		sel_dev_anchor = curr_config.anchor;
+	}
+	switch(curr_config.type)
+	{
+		case "SDAQ":
+			let grp = document.getElementsByName("date_period_unit");
+			for(let i=0; i<grp.length; i++)
+				grp[i].style.display = "none";
+			break;
+		case "MDAQ":
+			unit_inp.disabled = false;
+		case "IOBOX":
+		case "MTI":
+		case "NOX":
+			unit_inp.value = curr_config.unit;
+			if(curr_config.cal_date && typeof(curr_config.cal_date)==='string')
+				cal_date.value = curr_config.cal_date.replaceAll('/','-');
+			else
+			{
+				let now = new Date(), cal_date_str;
+				cal_date_str = now.getFullYear()+'-'+
+							   pad((now.getMonth()+1),2)+'-'+
+							   pad(now.getDate(),2);
+				cal_date.value = cal_date_str;
+			}
+			period.value = curr_config.cal_period?curr_config.cal_period : 12;
+			break;
+	}
+	vals_check();
+}
+function populate_conn_autocomplete()
+{
+	if (!dead_conn_fl || populate_conn_autocomplete.done)
+		return;
+	conn.disabled = false;
+	sensor_search.disabled = false;
+	//Populate conn_autocomplete.
+	let available_dev_paths = get_available_devs(curr_logstats_comb, curr_config.type, curr_iso_channels);
+	if(available_dev_paths && available_dev_paths.length)
+	{
+		conn_autocomplete = new autoComplete({
+			selector: "#conn",
+			data: {
+				src: available_dev_paths,
+				key: ["sensorUserId"]
+			},
+			resultItem: {
+				highlight: {render: true}
+			},
+			onSelection: function(fb){
+				conn.value = fb.selection.value.sensorUserId;
+				sel_dev_anchor = fb.selection.value.anchor;
+				conn.style.color = 'black';
+				conn_inp_val(conn);
+			}
+		});
+		switch(curr_config.type)
+		{
+			case  "SDAQ": conn.placeholder = "CAN-if.Addr:XX.CH:XX";break;
+			case  "MDAQ": conn.placeholder = "DEV_NAME.CH:XX.Val:X"; break;
+			case "IOBOX": conn.placeholder = "DEV_NAME.RX:X.CH:XX"; break;
+			case   "MTI": conn.placeholder = "DEV_NAME.Type.CH:XX"; break;
+			case   "NOX": conn.placeholder = "CAN-if.Addr:X.Sensor_name"; break;
+		}
+		conn.style.textAlign="left";
+	}
+	else
+	{
+		conn.placeholder = "No devs available";//"Use Search \u2192";
+		conn.style.textAlign="center";
+	}
+	populate_conn_autocomplete.done = true;
+}
+//Callback Functions
+function conn_inp_val(elem)
+{
+	let conn_found_fl = false;
+	elem.value = elem.value.replace(/\s/g, '');
+	elem.style.color = 'black';
+
+	for(let i=0; i<curr_iso_channels.length; i++)
+	{
+		if(elem.value == curr_iso_channels[i].conn ||
+     	   curr_iso_channels[i].anchor == sel_dev_anchor)
+		{
+			elem.style.color='red';
+			sel_dev_anchor = '';
+			send_button.disabled = true;
+			return;
+		}
+	}
+	if(conn_autocomplete)
+	{
+		for(let i=0; i<conn_autocomplete.data.src.length; i++)
+		{
+			if(elem.value == conn_autocomplete.data.src[i].sensorUserId)
+			{
+				conn_found_fl = true;
+				unit_inp.value = conn_autocomplete.data.src[i].unit;
+			}
+		}
+	}
+	if(!conn_found_fl)
+	{
+		elem.style.color='red';
+		sel_dev_anchor = '';
+		send_button.disabled = true;
+		return;
+	}
+	vals_check();
+	//Disable sensor_search
+	sensor_search.disabled = true;
+	if(search_win && !search_win.closed)
+		search_win.close();
+}
+function sensor_search_func()
+{
+	if(!search_win || search_win.closed)
+	{
+		search_win = PopupCenter("./dev_search.html"+"?q="+makeid(), "", 400, 500);
+		search_win.dev_type = type.value;
+		search_win.curr_iso_channels = curr_iso_channels;
+		search_win.okay_callback_func = function(sel_data){
+			if(!sel_data)
+				return;
+			sel_dev_anchor = sel_data.Anchor;
+			conn.value = sel_data.path;
+			conn.onchange();
+		};
+	}
+	else
+		search_win.focus();
+}
+function min_max_alarm_checker(elem)
+{
+	switch(elem.id)
+	{
+		case "min":
+			if(isNaN(elem.valueAsNumber))
+				elem.value = curr_config.min;
+			else if(Number(elem.value) > Number(max.value))
+				elem.value = max.value;
+			break;
+		case "max":
+			if(isNaN(elem.valueAsNumber))
+				elem.value = curr_config.max;
+			else if(Number(elem.value) < Number(min.value))
+				elem.value = min.value;
+			break;
+		case "alarmLowVal":
+			if(isNaN(elem.valueAsNumber))
+				elem.value = curr_config.alarmLowVal?curr_config.alarmLowVal:min.value;
+			else if(Number(elem.value) > Number(alarmHighVal.value))
+				elem.value = curr_config.alarmHighVal;
+			break;
+		case "alarmHighVal":
+			if(isNaN(elem.valueAsNumber))
+				elem.value = curr_config.alarmHighVal?curr_config.alarmHighVal:max.value;
+			else if(Number(elem.value) < Number(alarmLowVal.value))
+				elem.value = curr_config.alarmLowVal;
+			break;
+	}
+	vals_check();
+}
+
+function cal_date_changed(elem)
+{
+	let date_min, date_max, curr_value;
+	if(!elem.value)
+	{
+		let now_date = new Date();
+		elem.value = now_date.getFullYear()+'-'+
+					 pad((now_date.getMonth()+1),2)+'-'+
+					 pad(now_date.getDate(),2);
+	}
+	else
+	{
+		date_min = new Date(elem.min);
+		date_max = new Date(elem.max);
+		curr_value = new Date(elem.value);
+		if(curr_value < date_min)
+			elem.value = elem.min;
+		else if(curr_value > date_max)
+			elem.value = elem.max;
+	}
+	vals_check();
+}
+function unit_val_changed(elem)
+{
+	if(!elem.value)
+		elem.value = curr_config.unit?curr_config.unit:'-';
+	else
+		elem.value = elem.value.replace(/\s/g, '');
+	vals_check();
+}
+function period_input_changed(elem)
+{
+	if(isNaN(elem.valueAsNumber))
+		elem.value = !isNaN(period_input_changed.prev_value)?period_input_changed.prev_value: curr_config.cal_period?curr_config.cal_period:12;
+	if(!elem.value)
+		elem.value = period_input_changed.prev_value;
+	else
+	{
+		if(Number(elem.value) > Number(elem.max))
+			elem.value = elem.max;
+		if(Number(elem.value) < Number(elem.min))
+			elem.value = elem.min;
+		period_input_changed.prev_value = elem.value;
+	}
+	vals_check();
+}
+function alarm_checkbox(elem)
+{
+	elem.value = elem.checked?'yes':'no';
+	if(elem.id == "alarmLow")
+		alarmLowVal.disabled = !elem.checked;
+	else if(elem.id == "alarmHigh")
+		alarmHighVal.disabled = !elem.checked;
+	vals_check();
+}
+function vals_check()
+{
+	let okay = false;
+
+	if(!desc.value)
+		desc.value = curr_config.desc;
+	if( conn.value != curr_config.conn ||
+		desc.value != curr_config.desc ||
+	    min.value != curr_config.min  ||
+	    max.value != curr_config.max ||
+	    alarmLowVal.value != curr_config.alarmLowVal ||
+	    alarmHighVal.value != curr_config.alarmHighVal ||
+	    alarmLow.value != curr_config.alarmLow ||
+	    alarmHigh.value != curr_config.alarmHigh)
+		okay = true;
+	switch(curr_config.type)
+	{
+		case "MDAQ":
+			if(unit_inp.value != curr_config.unit)
+				okay = true;
+		case "IOBOX":
+		case "MTI":
+		case "NOX":
+			if(period.value != curr_config.cal_period ||
+			   cal_date.value.replaceAll('-','/') != curr_config.cal_date)
+				okay = true;
+			break;
+	}
+	if(!conn.value || conn.style.color === "red")
+		okay = false;
+	send_button.disabled = !okay;
+}
+function send()
+{
+	if(!sel_dev_anchor)
+	{
+		alert("sel_dev_anchor is Undefined !!!");
+		return;
+	}
+	let mod_link_data = {}, post_msg_contents = {COMMAND: "", DATA: []},
+		post_xhttp = new XMLHttpRequest();
+	mod_link_data.IF_type = curr_config.type;
+	mod_link_data.ISOChannel = curr_config.iso_name;
+	mod_link_data.Description = desc.value;
+	mod_link_data.Min = min.value;
+	mod_link_data.Max = max.value;
+	mod_link_data.AlarmHighVal = alarmHighVal.value;
+	mod_link_data.AlarmLowVal = alarmLowVal.value;
+	mod_link_data.AlarmHigh = alarmHigh.value;
+	mod_link_data.AlarmLow = alarmLow.value;
+	mod_link_data.Anchor = sel_dev_anchor;
+
+	if(curr_config.hasOwnProperty('Build_date') && curr_config.hasOwnProperty('Mod_date'))
+	{
+		mod_link_data.Build_date_UNIX = curr_config.Build_date.getTime()/1000;
+		mod_link_data.Mod_date_UNIX = Math.trunc(new Date().getTime()/1000);
+	}
+	if(curr_config.type != "SDAQ")
+	{
+		mod_link_data.Cal_period = period.value;
+		mod_link_data.Unit = unit_inp.value;
+		mod_link_data.Cal_date = cal_date.value.replaceAll('-','/');
+	}
+	post_xhttp.timeout = 5000;
+	post_xhttp.ontimeout = function(){
+		alert("Connection to server: Timeout Error");
+	};
+	post_xhttp.onreadystatechange = function(){
+		if(this.readyState == 4 && this.status == 200)
+		{
+			if(this.getResponseHeader("Content-Type")==="report/text")
+			{
+				console.log(this.responseText);
+				alert(this.responseText);
+			}
+			else if(this.getResponseHeader("Content-Type")==="application/json")
+			{
+				let report
+				try{report = JSON.parse(this.responseText);}
+				catch{return;}
+				if(report.success)
+				{
+					if(search_win && !search_win.closed)
+						search_win.close();
+					window.close('','_parent','');
+				}
+			}
+		}
+		else if(this.status == 404)
+			alert("Error 404: Data Not found");
+	};
+	//Prepare message contents.
+	post_msg_contents.COMMAND = "MOD";
+	post_msg_contents.DATA.push(mod_link_data);
+	post_xhttp.open("POST", "/morfeas_php/morfeas_web_if.php", true);
+	post_xhttp.send(compress(JSON.stringify(post_msg_contents)));
+}
+
+window.onbeforeunload = function()
+{
+	if(search_win && !search_win.closed)
+		search_win.close();
+};
+document.onkeydown = function(key)
+{
+	if(key.ctrlKey && key.altKey && key.key == 'r' && curr_config.conn !== "-")
+		dead_conn_fl = true;
+};
+//@license-end
+</script>
+</html>

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link href="../External_components/tabulator/dist/css/tabulator.min.css" rel="stylesheet">
+<link rel="shortcut icon" type="image/x-icon" href="/art/Morfeas_logo_yellow.ico">
+<title>Morfeas WEB ISOChannels Linker</title>
+</head>
+<body>
+	<table style="margin:auto;text-align:center;margin-bottom:.075in;width:5in;">
+		<tr>
+			<th colspan="5" style="font-size: 200%;">ISO Channels Linker</th>
+		</tr>
+		<tr>
+			<td colspan="4"><input id="status_tab" style="text-align:center;" type="textbox" size="45" placeholder="Click on ISOChannel to ADD" readonly></td>
+		</tr>
+	</table>
+	<table style="margin-bottom:.075in;">
+		<tr>
+			<td>
+				<div>
+					<select id="filter_field" onchange="filter_field_func(this);filter_func()" autocomplete="off">
+						<option value="default">Default</option>
+						<option value="iso_name">ISOChannel</option>
+						<option value="conn">Connection</option>
+						<option value="desc">Description</option>
+						<option value="meas">Value</option>
+						<option value="min">Min</option>
+						<option value="max">Max</option>
+					</select>
+					<select id="filter_type" onchange="filter_func()" autocomplete="off">
+						<option value="like">like</option>
+						<option value="regex">regex</option>
+						<option value="=" hidden>==</option>
+						<option value="<" hidden><</option>
+						<option value="<=" hidden><=</option>
+						<option value=">" hidden>></option>
+						<option value=">=" hidden>>=</option>
+						<option value="!=" hidden>!=</option>
+					</select>
+					<input id="filter_value" type="text" size="10" placeholder="Search" onkeyup="filter_func()">
+					<button id="filter_clear" onclick="filter_clear();">&#x1f9f9;</button>
+				</div>
+			</td>
+		</tr>
+	</table>
+	<div id="opcua_config_table" style="height:82vh;"></div>
+	<footer id="footer">
+		<div style="float:left;">
+			Author: Sam Harry Tzavaras &#169; 12021-12023<br>
+			<a href="../LICENSE">License: AGPLv3</a>
+		</div>
+	</footer>
+</body>
+<script src="../External_components/jquery/dist/jquery.min.js"></script>
+<script src="../External_components/sparkline/dist/jquery.sparkline.min.js"></script>
+<script src="../External_components/tabulator/dist/js/tabulator.min.js"></script>
+<script src="../External_components/moment/dist/moment-with-locales.min.js"></script>
+<script src='../morfeas_ecma/common.js'></script>
+<script src='../morfeas_ecma/morfeas_web_if.js'></script>
+<script src='./ISO_CH_Linker.js'></script>
+<script>
+//@license magnet:?xt=urn:btih:0b31508aeb0634b347b8270c7bee4d411b5d4109&dn=agpl-3.0.txt AGPL-v3.0
+/*
+@licstart  The following is the entire license notice for the
+JavaScript code in this page.
+
+Copyright (C) 12021-12022 Sam Harry Tzavaras
+
+The JavaScript code in this page is free software: you can
+redistribute it and/or modify it under the terms of the GNU
+General Public License (GNU AGPL) as published by the Free Software
+Foundation, either version 3 of the License, or any later version.
+The code is distributed WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE.  See the GNU GPL for more details.
+
+As additional permission under GNU GPL version 3 section 7, you
+may distribute non-source (e.g., minimized or compacted) forms of
+that code without the copy of the GNU GPL normally required by
+section 4, provided you include this license notice and a URL
+through which recipients can access the Corresponding Source.
+
+@licend  The above is the entire license notice
+for the JavaScript code in this page.
+*/
+"use strict";
+comp_check();
+const mode_enum = {
+	opcua_config: 0,
+	logstats: 1
+};
+const Color_def_str = "Green: Okay\n"+
+					  "Orange: Calibration not valid\n"+
+					  "Red: Sensor warning\n"+
+					  "Black: OFF-Line/Disconnected";
+const GRAPH_LENGTH = 120;
+//Global Vars.
+var data_req=false, isOPC_UA_config_empty = true,
+	OPCUA_Config_xml_modified_flag=false,
+	request_mode = mode_enum.opcua_config,
+	edit_wins = [], add_wins = [], import_win;
+
+const cal_date_format_params = {
+    outputFormat: moment.localeData().longDateFormat('L'),
+    invalidPlaceholder:"-"
+};
+var value_formatter = function(cell, formatterParams){
+	var value = cell.getValue(),
+    	data = cell.getData();
+
+	if(value && data.alarmHigh && data.alarmLow && data.alarmHighVal && data.alarmLowVal)
+	{
+		let value_num = parseFloat(value),
+			alarmHighVal_num = parseFloat(data.alarmHighVal),
+			alarmLowVal_num = parseFloat(data.alarmLowVal);
+
+		if((data.alarmHigh == 'yes' && value_num>alarmHighVal_num)||
+		   (data.alarmLow  == 'yes' && value_num<alarmLowVal_num))
+		    return "<span style='color:red'>" + value + "</span>";
+		else
+			return value;
+	}
+	return value;
+};
+var hist_graph_formatter = function(cell, formatterParams, onRendered){
+    onRendered(function(){$(cell.getElement()).sparkline(cell.getValue(), {width:"100%", type:"line"});});
+};
+var opcua_config_table = new Tabulator("#opcua_config_table",
+{
+ 	layout:"fitDataStretch",
+ 	responsiveLayout:"collapse",
+ 	selectable:true,
+ 	selectablePersistence:false,
+	rowContextMenu: rowMenu,
+	columns:
+	[
+	 	{formatter:"responsiveCollapse",  responsive:0, width:30, minWidth:30, hozAlign:"center", resizable:false, headerSort:false},
+		{title:"#", field:"order_num", hozAlign:"center", width:50, resizable:false, responsive:0},
+		{field:"col" ,formatter:"color", resizable:false, tooltip:Color_def_str, responsive:0},
+		{title:"ISOChannel", field:"iso_name", cellDblClick:ISOChannel_edit, headerMenu:ISOChannels_menu, tooltip:ISOChannel_tooltip, responsive:0},
+		{title:"Type", field:"dev_type", minWidth:100, responsive:0},
+		{title:"Connection", field:"conn", minWidth:170, responsive:0},
+		{title:"Status", field:"status", minWidth:90, hozAlign:"center", responsive:0},
+	 	{title:"Value", field:"meas", width:80, headerSort:false, responsive:0, formatter:value_formatter},
+	 	{title:"History", field:"graph", headerSort:false, responsive:0, formatter:hist_graph_formatter},
+		{title:"Valid Until", field:"valid_until", width:80, headerSort:false, responsive:1, formatter:"datetime", formatterParams:cal_date_format_params, tooltip:valid_until_tooltip},
+		{title:"Min", field:"min", headerSort:false, tooltip:Alarms_tooltip, responsive:2},
+		{title:"Max", field:"max", headerSort:false, tooltip:Alarms_tooltip, responsive:3},
+		{title:"Description", field:"desc", headerSort:false, responsive:4},
+	]
+});
+function filter_field_func(elem)
+{
+	let filter_type = document.getElementById("filter_type"), i;
+
+	if(elem.selectedIndex>4 && filter_type.selectedIndex<=1)
+	{
+
+		for(i=0; i<2 ; i++)
+			filter_type.options[i].hidden=true;
+		filter_type.selectedIndex = 2;
+		for(i=i; i<filter_type.options.length ; i++)
+			filter_type.options[i].hidden=false;
+	}
+	else if(elem.selectedIndex<=4 && filter_type.selectedIndex>1)
+	{
+		for(i=0; i<2 ; i++)
+			filter_type.options[i].hidden=false;
+		filter_type.selectedIndex = 0;
+		for(i=i; i<filter_type.options.length ; i++)
+			filter_type.options[i].hidden=true;
+	}
+}
+function filter_func()
+{
+	let filter_field = document.getElementById("filter_field").value,
+		filter_type  = document.getElementById("filter_type"),
+		filter_value = document.getElementById("filter_value").value;
+
+	if(!filter_value)
+	{
+		opcua_config_table.clearFilter(true);
+		return;
+	}
+	if(filter_field === "default")
+	{
+		opcua_config_table.setFilter([[
+			{field:"iso_name", type:filter_type.value, value:filter_value},
+			{field:"desc", type:filter_type.value, value:filter_value}
+		]]);
+	}
+	else
+		opcua_config_table.setFilter(filter_field, filter_type.value, filter_value);
+}
+function filter_clear()
+{
+	let i, filter_type = document.getElementById("filter_type");
+
+	for(i=0; i<2 ; i++)
+		filter_type.options[i].hidden=false;
+	for(i=i; i<filter_type.options.length ; i++)
+			filter_type.options[i].hidden=true;
+	document.getElementById("filter_field").selectedIndex = 0;
+	document.getElementById("filter_type").selectedIndex = 0;
+	document.getElementById("filter_value").value = "";
+
+	opcua_config_table.clearFilter(true);
+	opcua_config_table.clearSort(true);
+	opcua_config_table.deselectRow();
+}
+//AJAX response handler
+var xhttp = new XMLHttpRequest();
+xhttp.timeout = 2000;
+xhttp.onreadystatechange = function()
+{
+	let status_tab=document.getElementById("status_tab"), curr_logstats;
+	if(this.readyState == 4 && this.status == 200)
+	{
+		if(this.getResponseHeader("Content-Type")==="application/json")
+		{
+			switch(request_mode)
+			{
+				case mode_enum.opcua_config:
+					let curr_opcua_config;
+					try{curr_opcua_config = JSON.parse(this.responseText);}
+					catch{break;}
+					build_opcua_config_table(curr_opcua_config);
+					request_mode = mode_enum.logstats;
+					isOPC_UA_config_empty = !Object.entries(curr_opcua_config).length;
+					break;
+				case mode_enum.logstats:
+					try{curr_logstats = JSON.parse(this.responseText);}
+					catch{break;}
+					//Convert logstats to logstats_common.
+					let curr_logstats_comb = morfeas_logstat_commonizer(curr_logstats);
+					//Update logstats_common to ADD and Edit windows.
+					if(add_wins.length)
+						for(let i=0; i<add_wins.length; i++)
+							if(!add_wins[i].closed)
+								add_wins[i].curr_logstats_comb = curr_logstats_comb;
+					if(edit_wins.length)
+						for(let i=0; i<edit_wins.length; i++)
+							if(!edit_wins[i].closed)
+							{
+								edit_wins[i].curr_logstats_comb = curr_logstats_comb;
+								if(edit_wins[i].populate_conn_autocomplete)
+									edit_wins[i].populate_conn_autocomplete();
+							}
+					if(import_win && !import_win.closed)
+						import_win.curr_logstats_comb = curr_logstats_comb;
+					//Update status_tab and table.
+					if(isOPC_UA_config_empty)
+					{
+						status_tab.value="";
+						status_tab.style.color='black';
+					}
+					else
+					{
+						let last_update = new Date(curr_logstats.Build_time*1000);
+						status_tab.value = "Last_update: "+last_update.toLocaleDateString()+" "+last_update.toLocaleTimeString();
+						status_tab.style.color='black';
+						load_data_to_opcua_config_table(curr_logstats_comb);
+					}
+					if(curr_logstats.OPCUA_Config_xml_mod && !OPCUA_Config_xml_modified_flag)//Server inform modification of OPCUA config.
+					{
+						close_all_popup();
+						request_mode = mode_enum.opcua_config;
+					}
+					OPCUA_Config_xml_modified_flag = curr_logstats.OPCUA_Config_xml_mod;
+					break;
+			}
+		}
+		else
+			console.log(this.responseText);
+		data_req=false;
+	}
+	else if(this.status == 404)
+	{
+		status_tab.value = "Error 404: Data Not found";
+		status_tab.style.color='red';
+		data_req=false;
+	}
+};
+xhttp.ontimeout = function(){
+	let status_tab=document.getElementById("status_tab")
+
+	status_tab.value = "Connection to server: Timeout Error";
+	status_tab.style.color='blue';
+	request_mode = mode_enum.opcua_config;
+	data_req=false;
+};
+//Timer for get logstats
+setInterval(get_data_req, 1000);
+function get_data_req()
+{
+	if(!data_req)
+	{
+		switch(request_mode)
+		{
+			case mode_enum.opcua_config:
+				xhttp.open("GET", "/morfeas_php/morfeas_web_if.php?COMMAND=opcua_config", true);
+				xhttp.send();
+				data_req = true;
+				break;
+			case mode_enum.logstats:
+				xhttp.open("GET", "/morfeas_php/morfeas_web_if.php?COMMAND=logstats", true);
+				xhttp.send();
+				data_req = true;
+				break;
+		}
+	}
+}
+document.getElementById("filter_value").value = "";
+document.onkeydown = function(key)
+{
+	if(key.key === "Escape")
+		opcua_config_table.deselectRow();
+	if(key.ctrlKey && key.altKey)
+	{
+		switch(key.key)
+		{
+			case 'a': ISOChannel_add(); break;
+			case 'i': ISOChannels_import(); break;
+			case '€':
+			case 'e': ISOChannels_export_all(); break;
+		}
+	}
+};
+function close_all_popup()
+{
+	if(edit_wins.length)
+		for(let i=0; i<edit_wins.length; i++)
+			if(!edit_wins[i].closed)
+				edit_wins[i].close();
+	if(add_wins.length)
+		for(let i=0; i<add_wins.length; i++)
+			if(!add_wins[i].closed)
+				add_wins[i].close();
+	if(import_win && !import_win.closed)
+		import_win.close();
+};
+window.onbeforeunload = close_all_popup;
+iso_standard.request_isostandard();//Request ISOstandard from server.
+//@license-end
+</script>
+</html>
