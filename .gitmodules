@@ -1,4 +1,4 @@
 [submodule "pecl-dbus"]
 	path = pecl-dbus
-	url = https://github.com/derickr/pecl-dbus.git
+	url = https://github.com/Liaoliaoliaole/LOG_lib_pecl_dbus.git
 	ignore = all
